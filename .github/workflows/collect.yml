@@ -30,6 +30,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Restore data branch
+        run: |
+          git fetch --depth 1 origin data || true
+          if git rev-parse --verify -q origin/data >/dev/null; then
+            mkdir -p data
+            git show origin/data:data/links.jsonl   > data/links.jsonl   2>/dev/null || true
+            git show origin/data:data/resources.json > data/resources.json 2>/dev/null || true
+          fi
+          wc -l data/links.jsonl 2>/dev/null || echo "首次运行，无历史数据"
+
       - name: Collect
         env:
           TG_PROXY: ${{ secrets.TG_PROXY }}
