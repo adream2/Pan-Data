@@ -65,6 +65,17 @@ python collector/fetch_tg.py --pages 20 --proxy http://127.0.0.1:7890
 TG_PROXY=auto python collector/fetch_tg.py --pages 1   # 自动探测本机常见代理端口
 ```
 
+## PHP 搜索站（web/）
+
+采集仓库负责产数据，`web/` 是完整的 PHP 8.4 + SQLite 搜索站：前台搜索/投稿、后台审核/同步/采集。
+
+```bash
+cd web && php bin/init.php admin '密码' && php bin/sync.php hot
+php -S 127.0.0.1:8000 -t public public/router.php
+```
+
+详见 [web/README.md](web/README.md)。
+
 ## 扩源（发现 → 探针 → 入库）
 
 一条命令跑完「挖互推 → 探产出 → 写清单」，每周三自动执行（`expand.yml`）：

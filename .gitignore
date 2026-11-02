@@ -3,5 +3,6 @@ __pycache__/
 .tmp/
 preview.html
 data/
+.workbuddy/
 .env.mtproto
 .env
