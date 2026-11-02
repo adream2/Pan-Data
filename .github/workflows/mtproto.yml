@@ -2,7 +2,8 @@ name: mtproto
 
 on:
   schedule:
-    - cron: "*/15 * * * *"      # 每 15 分钟追一次新消息（账号直连，秒级）
+    - cron: "*/20 * * * *"      # 每 20 分钟追新（账号直连）
+    - cron: "0 4 * * *"         # 每天一次深度回溯（往历史翻，MTProto 独有价值）
   workflow_dispatch:
     inputs:
       limit:
@@ -11,6 +12,9 @@ on:
       channels:
         description: "临时频道，逗号分隔（留空则读 channels.txt）"
         default: ""
+      deep:
+        description: "深度回溯条数（0 = 只追新；设 500 会往历史翻 500 条/频道）"
+        default: "0"
 
 permissions:
   contents: write

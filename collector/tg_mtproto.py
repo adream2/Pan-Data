@@ -133,6 +133,15 @@ async def run(args) -> int:
             channels += [c for c in (tg.norm_channel(x) for x in extra.read_text(encoding="utf-8").splitlines()) if c]
     channels = list(dict.fromkeys(channels))
 
+    def channel_state(ch: str) -> dict:
+        value = state.get(ch)
+        if isinstance(value, int):
+            return {"last_id": value, "backfill_before": None}
+        if isinstance(value, dict):
+            return {"last_id": int(value.get("last_id") or 0),
+                    "backfill_before": value.get("backfill_before")}
+        return {"last_id": 0, "backfill_before": None}
+
     rows = load_rows(LINKS)
     seen = {r["id"] for r in rows}
     state = load_json(STATE, {})
@@ -154,7 +163,8 @@ async def run(args) -> int:
         me = await client.get_me()
         print(f"登录身份：{getattr(me, 'username', None) or me.id}")
         for channel in channels:
-            last_id = int(state.get(channel, 0))
+            st = channel_state(channel)
+            last_id = st["last_id"]
             new_rows: list[dict] = []
             try:
                 entity = await client.get_entity(channel)
@@ -166,10 +176,15 @@ async def run(args) -> int:
                 failed.append((channel, type(exc).__name__))
                 print(f"  ✗ {channel:<18} 无法解析（{type(exc).__name__}）")
                 continue
-            # 注意：min_id=None 会让 Telethon 内部比较时报 TypeError（且被外层吞掉），
-            # 所以只在有水位时才传这个参数
-            kwargs = {"limit": args.limit or None, "reverse": False}
-            if last_id:
+            # 两种模式：
+            #   --deep N  → 从游标往历史深处翻（MTProto 独有的价值）
+            #   默认      → 从水位往上取新消息
+            kwargs = {"limit": args.deep or args.limit or None, "reverse": False}
+            if args.deep:
+                cursor = st.get("backfill_before") or last_id
+                if cursor:
+                    kwargs["max_id"] = int(cursor)
+            elif last_id:
                 kwargs["min_id"] = last_id
             try:
                 async for msg in client.iter_messages(entity, **kwargs):
@@ -178,8 +193,11 @@ async def run(args) -> int:
                     scanned += 1
                     posted = msg.date.astimezone(timezone.utc).isoformat(timespec="seconds") if msg.date else None
                     new_rows.extend(build_rows(msg.message, channel, msg.id, posted))
-                    if not last_id or msg.id > last_id:
+                    if msg.id > last_id:
                         last_id = msg.id
+                    if args.deep:
+                        prev = st.get("backfill_before")
+                        st["backfill_before"] = msg.id - 1 if prev is None else min(prev, msg.id - 1)
             except FloodWaitError as exc:
                 failed.append((channel, f"floodwait_{exc.seconds}s"))
                 print(f"  ! {channel:<18} 限流，等 {exc.seconds}s")
@@ -192,8 +210,10 @@ async def run(args) -> int:
                 seen.add(r["id"])
             rows.extend(fresh)
             added += len(fresh)
-            state[channel] = last_id
-            print(f"  ✓ {channel:<18} 新链接 {len(fresh):>4}｜水位 {last_id}")
+            st["last_id"] = last_id
+            state[channel] = st
+            cursor_note = f"｜回溯游标 {st['backfill_before']}" if args.deep else ""
+            print(f"  ✓ {channel:<18} 新链接 {len(fresh):>4}｜水位 {last_id}{cursor_note}")
             await asyncio.sleep(args.sleep + random.random())
 
     rows.sort(key=lambda r: r.get("posted_at") or "", reverse=True)
@@ -215,6 +235,8 @@ def main() -> int:
     ap.add_argument("--extra-file", default=str(ROOT / "collector" / "mtproto_channels.txt"),
                     help="额外频道清单（网页预览抓不到、但账号能看的）")
     ap.add_argument("--limit", type=int, default=0, help="每个频道最多拉多少条（0=只取新消息）")
+    ap.add_argument("--deep", type=int, default=0,
+                    help="深度回溯模式：从游标往历史翻 N 条（可反复跑，游标自动前移）")
     ap.add_argument("--sleep", type=float, default=1.5, help="频道间隔，别把账号搞限流")
     args = ap.parse_args()
     return asyncio.run(run(args))
