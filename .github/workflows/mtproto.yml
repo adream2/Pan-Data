@@ -69,9 +69,15 @@ jobs:
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           TG_SESSION: ${{ secrets.TG_SESSION }}
         run: |
-          python collector/tg_mtproto.py \
-            --limit "${{ github.event.inputs.limit || '0' }}" \
-            --channels "${{ github.event.inputs.channels }}"
+          if [ "${{ github.event.schedule }}" = "0 4 * * *" ]; then
+            echo "每日深度回溯 --deep 400"
+            python collector/tg_mtproto.py --deep 400
+          else
+            python collector/tg_mtproto.py \
+              --limit "${{ github.event.inputs.limit || '0' }}" \
+              --deep "${{ github.event.inputs.deep || '0' }}" \
+              --channels "${{ github.event.inputs.channels }}"
+          fi
 
       - name: Export contract
         if: steps.guard.outputs.skip != 'true'
