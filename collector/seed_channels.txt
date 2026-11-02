@@ -1,0 +1,28 @@
+# 候选频道池（探针输入）。来源：netdisk-spider 的 CHANNEL_CONFIG（2026-07 验证过）+ 自己发现
+# 注意：这里是「候选」，探完再决定要不要写进 channels.txt
+
+# --- 对方标记 HIGH（声称高产） ---
+bdyunpan
+PanjClub
+Quark_Movies
+yunpanbaidu
+QuarkShare
+quarkshare
+kuakeshare
+yunpanNB
+leoziyuan
+
+# --- 对方标记 MID ---
+yunpan139
+yunpanx
+quarkdj
+fuliziyuan
+
+# --- 对方标记 LOW ---
+shareAliyun
+yunpanxunlei
+yunpanuc
+XiangxiuNBB
+
+# --- 自己发现的 ---
+freekecheng

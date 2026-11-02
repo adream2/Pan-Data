@@ -1,0 +1,75 @@
+name: collect
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"      # 每 30 分钟；避开整点
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "每个频道回溯页数（首次建库填 20）"
+        default: "1"
+      channels:
+        description: "临时频道，逗号分隔（留空则读 channels.txt）"
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pan-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Collect
+        env:
+          TG_PROXY: ${{ secrets.TG_PROXY }}
+        run: |
+          python collector/fetch_tg.py \
+            --pages "${{ github.event.inputs.pages || '1' }}" \
+            --channels "${{ github.event.inputs.channels }}" \
+            --sleep 1.5
+
+      - name: Export contract
+        run: python tools/export.py
+
+      - name: Verify
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("data/resources.json", encoding="utf-8"))
+          assert d["schema_version"] == "1.0", "schema 版本不符"
+          assert d["counts"]["resources"] > 0, "资源为空"
+          print("resources:", d["counts"])
+          PY
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/links.jsonl data/resources.json
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+          else
+            git commit -m "chore(data): collect $(date -u +%FT%TZ)"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push
+          fi
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-log
+          path: |
+            data/links.jsonl
+          retention-days: 3

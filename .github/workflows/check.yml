@@ -1,0 +1,56 @@
+name: check
+
+on:
+  schedule:
+    - cron: "23 3 * * *"        # 每天 UTC 03:23（北京时间 11:23）
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "本次最多巡检多少条（0 = 全部到期条目）"
+        default: "0"
+      recheck_days:
+        description: "跳过 N 天内查过的"
+        default: "7"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pan-data
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check links
+        env:
+          TG_PROXY: ${{ secrets.TG_PROXY }}
+        run: |
+          python collector/check_links.py \
+            --recheck-days "${{ github.event.inputs.recheck_days || '7' }}" \
+            --limit "${{ github.event.inputs.limit || '0' }}" \
+            --delay 0.8
+
+      - name: Export contract
+        run: python tools/export.py
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/links.jsonl data/resources.json
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+          else
+            git commit -m "chore(data): link check $(date -u +%FT%TZ)"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push
+          fi

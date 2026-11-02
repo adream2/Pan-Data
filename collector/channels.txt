@@ -1,0 +1,20 @@
+# 正式采集清单（探针实测有效才写进来）
+# 探针：python tools/probe_channels.py --file collector/seed_channels.txt
+# bdyunpan 已剔除：2026-11 实测只剩 2 条消息，已停更
+freekecheng
+PanjClub
+Quark_Movies
+yunpanbaidu
+QuarkShare
+quarkshare
+kuakeshare
+yunpanNB
+leoziyuan
+yunpan139
+yunpanx
+quarkdj
+fuliziyuan
+shareAliyun
+yunpanxunlei
+yunpanuc
+XiangxiuNBB
