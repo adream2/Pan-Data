@@ -31,7 +31,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Guard (未配置 session 就跳过，避免每 15 分钟报红)
+        id: guard
+        env:
+          SESSION: ${{ secrets.TG_SESSION }}
+        run: |
+          if [ -z "$SESSION" ]; then
+            echo "::notice::未配置 TG_SESSION，跳过 MTProto 采集（见 README「MTProto 冲量」）"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Restore data branch
+        if: steps.guard.outputs.skip != 'true'
         run: |
           git fetch --depth 1 origin data || true
           if git rev-parse --verify -q origin/data >/dev/null; then
@@ -42,9 +55,11 @@ jobs:
           fi
 
       - name: Install telethon
+        if: steps.guard.outputs.skip != 'true'
         run: pip install --quiet telethon
 
       - name: Collect via MTProto
+        if: steps.guard.outputs.skip != 'true'
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
@@ -55,9 +70,11 @@ jobs:
             --channels "${{ github.event.inputs.channels }}"
 
       - name: Export contract
+        if: steps.guard.outputs.skip != 'true'
         run: python tools/export.py
 
       - name: Publish data branch
+        if: steps.guard.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
