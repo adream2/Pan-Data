@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
 .tmp/
-data/*.tmp
 preview.html
+data/*.json
+data/*.jsonl
+data/*.tmp

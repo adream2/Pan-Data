@@ -19,7 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "data" / "links.jsonl"
 OUT = ROOT / "data" / "resources.json"
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
+DEFAULT_DAYS = 90
 
 
 def load(path: Path) -> list[dict]:
@@ -42,6 +43,20 @@ def best_title(row: dict) -> str:
     if (len(title) < 4 or JUNK_TITLE_RE.search(title)) and len(core) >= 2:
         return core
     return title or core
+
+
+def within_days(row: dict, days: int) -> bool:
+    """按发布时间过滤。没有时间戳的一律保留，宁可多不可漏。"""
+    ts = row.get("posted_at")
+    if not ts:
+        return True
+    try:
+        posted = datetime.fromisoformat(ts)
+    except ValueError:
+        return True
+    if posted.tzinfo is None:
+        posted = posted.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - posted).days <= days
 
 
 def build_resource(row: dict, siblings: list[dict]) -> dict:
@@ -75,7 +90,7 @@ def build_resource(row: dict, siblings: list[dict]) -> dict:
         "channel": row.get("channel"),
         "post_url": row.get("post_url"),
         "posted_at": row.get("posted_at"),
-        "desc": row.get("desc") or "",
+        "desc": (row.get("desc") or "")[:100],
     }
 
 
@@ -83,11 +98,17 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=str(SRC))
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--days", type=int, default=DEFAULT_DAYS,
+                    help=f"只导出最近 N 天的资源，0 = 全量（默认 {DEFAULT_DAYS}）")
     ap.add_argument("--pretty", action="store_true", help="缩进输出，方便人看；生产用紧凑")
     ap.add_argument("--with-all", action="store_true", help="额外导出被收敛掉的来源")
     args = ap.parse_args()
 
     rows = load(Path(args.src))
+    total_rows = len(rows)
+    if args.days > 0:
+        rows = [r for r in rows if within_days(r, args.days)]
+
     by_group: dict[str, list[dict]] = {}
     for row in rows:
         by_group.setdefault(row.get("group_key") or row["id"], []).append(row)
@@ -105,7 +126,9 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "counts": {
             "resources": len(resources),
-            "links": len(rows),
+            "links": total_rows,
+            "links_in_window": len(rows),
+            "window_days": args.days,
             "channels": len({r.get("channel") for r in rows if r.get("channel")}),
             "valid": sum(1 for r in resources if r["status"] == "valid"),
             "invalid": sum(1 for r in resources if r["status"] == "invalid"),
