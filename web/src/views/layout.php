@@ -24,7 +24,13 @@
     </form>
     <nav class="flex shrink-0 items-center gap-1 text-sm">
       <a href="/submit" class="rounded-lg px-3 py-2 text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900">投稿</a>
-      <a href="/admin.php" class="rounded-lg px-3 py-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900">后台</a>
+      <?php $navUser = function_exists('user_current') ? user_current() : null; ?>
+      <?php if ($navUser): ?>
+        <a href="/user?r=me" class="rounded-lg px-3 py-2 text-neutral-700 transition hover:bg-neutral-100 hover:text-neutral-900"><?= e((string) $navUser['username']) ?></a>
+      <?php else: ?>
+        <a href="/user?r=login" class="rounded-lg px-3 py-2 text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900">登录</a>
+      <?php endif; ?>
+      <a href="/admin.php" class="rounded-lg px-3 py-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900">后台</a>
     </nav>
   </div>
 </header>

@@ -110,3 +110,76 @@ function schema_ready(): bool
         return false;
     }
 }
+
+/** 增量升级：用户中心、收藏、举报、多账号、点击统计（PRAGMA user_version 控制） */
+function schema_upgrade(): void
+{
+    $version = (int) db()->query('PRAGMA user_version')->fetchColumn();
+    if ($version >= 2) {
+        return;
+    }
+    $pdo = db();
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS users (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    username       TEXT NOT NULL UNIQUE,
+    email          TEXT,
+    pass_hash      TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'active',
+    api_key        TEXT UNIQUE,
+    api_expires_at TEXT,
+    created_at     TEXT NOT NULL,
+    last_login_at  TEXT
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id     INTEGER NOT NULL,
+    resource_id TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, resource_id)
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    resource_id TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'invalid',
+    note        TEXT,
+    user_id     INTEGER,
+    ip          TEXT,
+    status      TEXT NOT NULL DEFAULT 'open',
+    created_at  TEXT NOT NULL
+)
+SQL);
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC)');
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS pan_accounts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider     TEXT NOT NULL,
+    label        TEXT NOT NULL DEFAULT '',
+    cookie       TEXT NOT NULL,
+    enabled      INTEGER NOT NULL DEFAULT 1,
+    last_used_at TEXT,
+    note         TEXT,
+    created_at   TEXT NOT NULL
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS clicks (
+    resource_id TEXT NOT NULL,
+    day         TEXT NOT NULL,
+    count       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (resource_id, day)
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS search_logs (
+    q    TEXT NOT NULL,
+    day  TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (q, day)
+)
+SQL);
+    $pdo->exec('PRAGMA user_version = 2');
+}

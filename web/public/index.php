@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/moderation.php';
+require_once __DIR__ . '/../src/user.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -11,6 +12,22 @@ session_start();
 
 if (!schema_ready()) {
     schema_migrate();
+}
+schema_upgrade();
+$currentUser = user_current();
+
+// 详情页的举报是直接 POST 回详情页的，在这里处理掉
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'report') {
+    csrf_check();
+    $rid = (string) ($_POST['resource_id'] ?? '');
+    if ($rid !== '' && rate_limit('report', 10, 3600)) {
+        report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''),
+            $currentUser !== null ? (int) $currentUser['id'] : null);
+        flash('举报已提交，感谢反馈');
+    } else {
+        flash('举报太频繁，稍后再试', 'err');
+    }
+    redirect('/detail?id=' . urlencode($rid));
 }
 
 // 路由：支持 /search 伪静态，也支持 ?r=search
@@ -104,6 +121,9 @@ switch ($route) {
         ];
         $res = repo_search($filters, max(1, (int) ($_GET['page'] ?? 1)), (int) cfg('page_size', 20));
         $facets = repo_facets();
+        if ($q !== '') {
+            search_track($q);
+        }
 
         $chip = function (string $key, string $value, string $label, int $count, string $current) use ($q): string {
             $active = $current === $value;
@@ -154,6 +174,8 @@ switch ($route) {
             $title = '404';
             break;
         }
+        click_track((string) $row['id']);
+        $isFav = $currentUser !== null && user_is_favorite((int) $currentUser['id'], (string) $row['id']);
         $metaBits = [];
         if ($row['year']) {
             $metaBits[] = (int) $row['year'] . '年';
@@ -204,7 +226,23 @@ switch ($route) {
             . ($row['pwd'] ? '<span class="rounded-lg bg-amber-50 px-3 py-2 font-mono text-sm text-amber-700 ring-1 ring-amber-200">提取码 ' . e($row['pwd']) . '</span>' : '')
             . '</div>'
             . '<p class="mt-3 break-all font-mono text-[11px] text-neutral-400">' . e($row['share_url']) . '</p>'
-            . '</div>'
+            . '<div class="mt-4 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-4">'
+            . ($currentUser !== null
+                ? '<form method="post" action="/user?r=favs"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                  . '<input type="hidden" name="action" value="favorite"><input type="hidden" name="resource_id" value="' . e((string) $row['id']) . '">'
+                  . '<button class="btn-soft" type="submit">' . ($isFav ? '已收藏' : '收藏') . '</button></form>'
+                : '<a class="btn-soft" href="/user?r=login">登录后收藏</a>')
+            . '<span class="text-[11px] text-neutral-400">浏览 ' . number_format(click_count((string) $row['id'])) . ' 次</span>'
+            . '<form method="post" action="/detail?id=' . e((string) $row['id']) . '" class="ml-auto flex items-center gap-2">'
+            . '<input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+            . '<input type="hidden" name="action" value="report">'
+            . '<input type="hidden" name="resource_id" value="' . e((string) $row['id']) . '">'
+            . '<select name="kind" class="h-8 rounded-md bg-white px-2 text-xs ring-1 ring-neutral-200 focus:outline-none">'
+            . '<option value="invalid">链接失效</option><option value="wrong">内容不符</option>'
+            . '<option value="illegal">违规内容</option><option value="other">其它</option></select>'
+            . '<input name="note" maxlength="120" placeholder="补充说明（可选）" class="h-8 w-36 rounded-md bg-white px-2 text-xs ring-1 ring-neutral-200 placeholder:text-neutral-400 focus:outline-none">'
+            . '<button class="btn-soft" type="submit">举报</button></form>'
+            . '</div></div>'
             . ($mirrorRows !== '' ? '<h2 class="mb-3 mt-8 text-xs font-medium uppercase tracking-wide text-neutral-400">备用链接 ' . count($row['mirrors']) . '</h2>'
                 . '<ul class="space-y-2 rounded-xl bg-white p-4 ring-1 ring-neutral-200/80">' . $mirrorRows . '</ul>' : '')
             . ($row['desc'] !== '' ? '<h2 class="mb-2 mt-8 text-xs font-medium uppercase tracking-wide text-neutral-400">简介</h2>'
@@ -308,6 +346,11 @@ switch ($route) {
                 . ' <span class="text-neutral-400">' . (int) $t['c'] . '</span></a>';
         }
 
+        $hotWords = top_searches(7, 8);
+        $hotHtml = '';
+        foreach ($hotWords as $h) {
+            $hotHtml .= '<a href="/search?q=' . urlencode((string) $h['q']) . '" class="chip">' . e((string) $h['q']) . '</a>';
+        }
         $content = '<section class="pb-10 pt-14 text-center">'
             . '<h1 class="text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">找资源，先搜这里</h1>'
             . '<p class="mt-3 text-sm text-neutral-500">'
@@ -320,6 +363,8 @@ switch ($route) {
             . '<button class="btn h-12 rounded-full px-6" type="submit">搜索</button>'
             . '</form>'
             . '<div class="mt-6 flex flex-wrap items-center justify-center gap-2">' . $chips . '</div>'
+            . ($hotHtml !== '' ? '<div class="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-neutral-400">'
+                . '<span class="mr-1">大家在搜</span>' . $hotHtml . '</div>' : '')
             . '</section>'
             . '<div class="mb-4 flex items-baseline justify-between">'
             . '<h2 class="text-sm font-medium text-neutral-900">最新收录</h2>'

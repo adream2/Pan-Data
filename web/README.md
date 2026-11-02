@@ -24,6 +24,39 @@ php -S 127.0.0.1:8000 -t public public/router.php
 
 打开 http://127.0.0.1:8000 ，后台在 `/admin.php`。
 
+## 用户中心
+
+`/user` — 注册 / 登录 / 我的投稿 / 我的收藏 / 我的举报 / API 密钥。
+
+- 注册即登录，密码 `password_hash`（bcrypt），登录限流 10 次 / 15 分钟
+- 收藏：详情页一键收藏/取消
+- 举报：详情页选类型（失效 / 内容不符 / 违规 / 其它）+ 备注，进后台举报池
+- API 密钥：自助生成，90 天有效，可重新生成（旧 key 立即失效）
+
+## 开放 API
+
+```bash
+curl -H "X-API-Key: pk_xxx" "https://your-domain/api.php?q=课程&limit=20&type=course&provider=quark"
+curl "https://your-domain/api.php?action=stats"     # 公开统计，不需要 key
+```
+
+返回：`{code:0, data:{total,page,pageSize,pages,items:[{id,title,provider,type,year,episode,complete,share_url,pwd,status,posted_at,sources,detail_url}]}}`
+限流：每 key 60 次/分钟。无效 key 返回 401，超限 429。
+
+## 后台（对齐 urldb 的能力面）
+
+| 模块 | 能力 |
+|---|---|
+| 概览 | 今日入库（含昨日环比）、今日搜索、今日点击、待处理举报、按类型/平台分布、近 7 天热搜与热门资源 |
+| 投稿审核 | 风险分级（low/medium/high/blocked），通过即入库 |
+| 资源管理 | 关键词搜索、下架 |
+| 同步与采集 | 热文件同步、历史分片逐个导入、本地 t.me 采集、一键触发云端 workflow |
+| 用户管理 | 列表、封禁/解封、发 API Key、重置密码 |
+| 网盘账号 | 多账号 CRUD（夸克/百度/阿里/迅雷/UC）、启用停用，供自动转存用 |
+| 举报处理 | 待处理队列，标「失效」会自动把资源置为 invalid |
+| 批量录入 | 粘贴多行「标题 链接」，自动识别平台/提取码、跳过重复 |
+| 设置 | 站名/副标题/公告/开放投稿/改密 |
+
 ## 数据来源（三条腿，可同时开）
 
 | 方式 | 入口 | 说明 |

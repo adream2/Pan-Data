@@ -5,10 +5,14 @@ require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/auth.php';
 require_once __DIR__ . '/../src/moderation.php';
+require_once __DIR__ . '/../src/user.php';
+require_once __DIR__ . '/../src/admin_extra.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
 session_start();
+
+schema_upgrade();
 
 if (!schema_ready()) {
     schema_migrate();
@@ -35,6 +39,7 @@ if ($action !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     csrf_check();
     require_admin();
+    admin_extra_actions($action);
 
     switch ($action) {
         case 'logout':
@@ -202,6 +207,10 @@ $navItems = [
     'subs'      => '投稿审核',
     'res'       => '资源管理',
     'sync'      => '同步与采集',
+    'users'     => '用户管理',
+    'accounts'  => '网盘账号',
+    'reports'   => '举报处理',
+    'bulk'      => '批量录入',
     'settings'  => '设置',
 ];
 $pending = (int) db()->query("SELECT COUNT(*) FROM submissions WHERE status='pending'")->fetchColumn();
@@ -425,6 +434,14 @@ switch ($route) {
             . '<table class="w-full">' . ($provRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无</td></tr>') . '</table></section>'
             . '</div>';
         break;
+}
+
+$extraBody = admin_extra_body($route);
+if ($extraBody !== '') {
+    $body = $extraBody;
+}
+if ($route === 'dashboard') {
+    $body = admin_dashboard_extra() . '<div class="mb-2 text-xs uppercase tracking-wide text-neutral-400">库存概览</div>' . $body;
 }
 
 $flashHtml = $flash
