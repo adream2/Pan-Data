@@ -67,13 +67,15 @@ TG_PROXY=auto python collector/fetch_tg.py --pages 1   # 自动探测本机常�
 
 ## 扩源（发现 → 探针 → 入库）
 
-三步走，别靠人肉找频道：
+一条命令跑完「挖互推 → 探产出 → 写清单」，每周三自动执行（`expand.yml`）：
 
 ```bash
-python tools/discover_channels.py --pages 3     # 1. 从已有频道的互推里挖候选
-python tools/probe_channels.py --file collector/discovered.txt   # 2. 探产出率
-# 3. 有产出的频道手动加进 collector/channels.txt（带行尾注释，norm_channel 会剥掉）
+python tools/auto_expand.py --pages 3 --min-links 8    # 达标就自动写进 channels.txt
+python tools/auto_expand.py --dry-run                   # 只看结果
 ```
+
+判据：探针抓 1 页，能出 ≥8 条网盘链接就收。重复跑是安全的（已有频道跳过），所以是滚雪球。
+手动拆开跑也可以：`discover_channels.py` → `probe_channels.py` → 手工编辑清单。
 
 2026-11 实测：16 个种子频道挖出 12 个候选，8 个有产出（合计单页 207 条链接），
 `aliyun_4k_movies`、`netdisk_movies` 这类还带来了阿里云盘的新来源。

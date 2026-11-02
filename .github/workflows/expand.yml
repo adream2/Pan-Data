@@ -1,0 +1,55 @@
+name: expand
+
+on:
+  schedule:
+    - cron: "17 5 * * 3"        # 每周三 05:17 UTC，滚雪球扩源
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "每个种子频道翻几页找互推"
+        default: "3"
+      min_links:
+        description: "探针单页至少多少条链接才收"
+        default: "8"
+      dry_run:
+        description: "true = 只看结果不写文件"
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pan-expand
+  cancel-in-progress: false
+
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Discover and probe
+        env:
+          TG_PROXY: ${{ secrets.TG_PROXY }}
+        run: |
+          ARGS="--pages ${{ github.event.inputs.pages || '3' }} --min-links ${{ github.event.inputs.min_links || '8' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          python tools/auto_expand.py $ARGS
+
+      - name: Commit channel list
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add collector/channels.txt collector/discovered.txt
+          if git diff --cached --quiet; then
+            echo "没有新增频道"
+          else
+            git commit -m "feat(channels): 自动扩源 $(date -u +%F)"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push
+          fi
