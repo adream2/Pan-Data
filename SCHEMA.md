@@ -4,9 +4,9 @@
 
 | 项 | 值 |
 |---|---|
-| 路径 | `data/resources.json` |
-| 当前版本 | `1.0` |
-| 生成方 | `tools/export.py`（每次采集/巡检后自动重跑） |
+| 路径 | `data` 分支的 `data/resources.json`（主分支不含数据） |
+| 当前版本 | `1.1` |
+| 生成方 | `tools/export.py`（每次采集/巡检后自动重跑，默认 90 天窗口） |
 | 编码 | UTF-8，紧凑 JSON（`--pretty` 可缩进） |
 
 ## 顶层
@@ -15,7 +15,7 @@
 |---|---|---|
 | `schema_version` | string | 契约版本，**字段增删改必升** |
 | `generated_at` | string | UTC ISO8601 |
-| `counts` | object | `resources / links / channels / valid / invalid / unchecked` |
+| `counts` | object | `resources / links / links_in_window / window_days / channels / valid / invalid / unchecked` |
 | `resources` | array | 资源列表，按 `posted_at` 倒序 |
 
 ## resources[]
@@ -42,7 +42,7 @@
 | `channel` | string | 否 | 当前版本来源频道 |
 | `post_url` | string | 否 | 原帖地址 |
 | `posted_at` | string | 是 | 原帖发布时间，UTC ISO8601 |
-| `desc` | string | 否 | 描述（≤300 字） |
+| `desc` | string | 否 | 描述（≤100 字，控制体积） |
 
 ### mirrors[]
 
@@ -59,11 +59,12 @@
 - 一个 `id` 只出现一次，同作品的旧集数已被收敛进 `episode` / `mirrors`。
 - `mirrors` 非空时建议给用户「换一个盘」入口：夸克失效换百度。
 - 排序直接用数组顺序（`posted_at` 倒序），不要再二次排序。
+- **只含最近 90 天**（`counts.window_days`）。更早的链接不承诺，也不再提供——网盘链接寿命本来就短。
 
 ## 示例
 
 ```bash
-curl -s https://raw.githubusercontent.com/<owner>/<repo>/main/data/resources.json | jq '.counts'
+curl -s https://raw.githubusercontent.com/adream2/Pan-Data/data/data/resources.json | jq '.counts'
 ```
 
 ```js

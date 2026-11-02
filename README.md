@@ -13,14 +13,19 @@
 
 ## 对外契约
 
-**只认 `data/resources.json`**，格式见 [`SCHEMA.md`](SCHEMA.md)（v1.0）。
+**只认 `data` 分支的 `resources.json`**，格式见 [`SCHEMA.md`](SCHEMA.md)（v1.1）。
 
-```bash
-python tools/export.py          # 内部 links.jsonl -> 对外 resources.json
-curl -s .../main/data/resources.json | jq '.counts'
+```
+https://raw.githubusercontent.com/adream2/Pan-Data/data/data/resources.json
 ```
 
-- 只导出「当前版本」，894 条链接收敛成 698 个资源
+```bash
+python tools/export.py                 # 默认 90 天窗口
+python tools/export.py --days 0        # 全量（本地排查用，别发布）
+```
+
+- 只导出「当前版本」+ 最近 90 天：2802 条链接 → 1172 个资源 / 989 KB
+- 体积可控：desc 截 100 字，超出窗口的不导出，稳态约 15MB 以内
 - 字段顺序固定，带 `schema_version`，改字段必须升版本
 - `mirrors` 给出同资源的备用盘链接（夸克挂了换百度）
 - 内部 `data/links.jsonl` 是工作数据，随时会变，别对外承诺
@@ -29,10 +34,13 @@ curl -s .../main/data/resources.json | jq '.counts'
 
 | workflow | 频率 | 干什么 |
 |---|---|---|
-| `collect.yml` | 每 30 分钟（:07/:37） | 抓新消息 → 归一/分组 → 导出 → 提交 |
-| `check.yml` | 每天 03:23 UTC | 巡检 7 天前查过的链接 → 重算当前版本 → 导出 → 提交 |
+| `collect.yml` | 每 30 分钟（:07/:37） | 抓新消息 → 归一/分组 → 导出 → 发布 `data` 分支 |
+| `check.yml` | 每天 03:23 UTC | 巡检 7 天前查过的链接 → 重算当前版本 → 导出 → 发布 `data` 分支 |
 
 两个 job 共用 `concurrency: pan-data`，不会互相踩。首次建库用 `workflow_dispatch` 把 `pages` 填 20。
+
+**数据为什么在独立分支**：数据是派生产物，每次全量重写。若跟着代码提交，每天 20 次 × 整文件 = 每月上百 MB 的 git 历史。
+`data` 分支每次用 `git push -f` 覆盖成**单条提交**，主仓永远干净，仓库体积只等于最新文件。
 
 本地跑（纯标准库，零依赖）：
 
