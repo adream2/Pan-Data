@@ -169,13 +169,18 @@ switch ($route) {
             $metaBits[] = '来源 ' . $row['channel'];
         }
 
+        // 来源可能有几十个，详情页只展示前 6 个，其余给出计数（避免页面被撑爆）
+        $allMirrors = $row['mirrors'] ?? [];
         $mirrorRows = '';
-        foreach (($row['mirrors'] ?? []) as $m) {
+        foreach (array_slice($allMirrors, 0, 6) as $m) {
             $mirrorRows .= '<li class="flex flex-wrap items-center gap-2 text-sm">'
                 . '<span class="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] font-medium text-neutral-600">' . e((string) ($m['provider'] ?? '')) . '</span>'
                 . '<a class="break-all text-brand-600 hover:underline" href="' . e((string) ($m['share_url'] ?? '#')) . '" target="_blank" rel="nofollow noopener">' . e((string) ($m['share_url'] ?? '')) . '</a>'
                 . (!empty($m['pwd']) ? '<span class="rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[11px] text-amber-700">码 ' . e((string) $m['pwd']) . '</span>' : '')
                 . '</li>';
+        }
+        if (count($allMirrors) > 6) {
+            $mirrorRows .= '<li class="text-[11px] text-neutral-400">还有 ' . (count($allMirrors) - 6) . ' 个来源未展开</li>';
         }
 
         $related = repo_search(['q' => mb_substr((string) $row['core_title'], 0, 12)], 1, 5)['items'];
