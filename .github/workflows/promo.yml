@@ -1,0 +1,89 @@
+name: promo
+
+# 只在手动触发时运行：拉新是真金白银的操作，不能定时自己动
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "scan / approve / run / dashboard"
+        default: "dashboard"
+      limit:
+        description: "本次处理多少条"
+        default: "20"
+      ids:
+        description: "approve 时的资源 ID（空格分隔）"
+        default: ""
+      live:
+        description: "run 时是否真的转存（true/false）"
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pan-data
+  cancel-in-progress: false
+
+jobs:
+  promo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore data branch
+        run: |
+          git fetch --depth 1 origin data || true
+          if git rev-parse --verify -q origin/data >/dev/null; then
+            git archive origin/data data | tar -x -C "$GITHUB_WORKSPACE"
+          fi
+
+      - name: Run promo action
+        env:
+          QUARK_COOKIE: ${{ secrets.QUARK_COOKIE }}
+        run: |
+          set -e
+          ACTION="${{ github.event.inputs.action }}"
+          LIMIT="${{ github.event.inputs.limit }}"
+          case "$ACTION" in
+            scan)
+              python tools/promo.py scan --limit "$LIMIT" --skip-blocked
+              ;;
+            approve)
+              python tools/promo.py approve ${{ github.event.inputs.ids }} --force
+              ;;
+            run)
+              if [ "${{ github.event.inputs.live }}" = "true" ]; then
+                python tools/promo.py run --limit "$LIMIT" --live
+              else
+                python tools/promo.py run --limit "$LIMIT"
+              fi
+              ;;
+            *)
+              echo "只刷新管控台"
+              ;;
+          esac
+          python tools/promo.py stats
+          python tools/promo.py dashboard
+
+      - name: Publish data branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/datarepo && cd /tmp/datarepo
+          git init -q -b data
+          mkdir -p data
+          cp -r "$GITHUB_WORKSPACE/data/." data/
+          rm -f data/*.tmp
+          git add -A
+          git commit -q -m "data: promo $(date -u +%FT%TZ)"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin data
+          echo "管控台：${{ github.server_url }}/${GITHUB_REPOSITORY}/blob/data/data/promo.html"

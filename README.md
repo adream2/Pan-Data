@@ -141,6 +141,36 @@ python tools/probe_channels.py --proxy http://127.0.0.1:7890
 - 解析失败/限流不会中断：失败频道会列在日志末尾，`FloodWait` 会按 Telegram 要求等待。
 - 增量靠 `data/mtproto_state.json` 记录每个频道的水位（最大消息 ID），不会重复入库。
 
+## 拉新（夸克）
+
+网盘拉新的唯一正确姿势：**先把资源转存到自己账号，再用自己的分享发出去**。
+别人给的链接你控制不了——随时被删、随时失效、也带不上你的渠道参数。
+
+```bash
+python tools/promo.py scan --limit 50 --skip-blocked   # 选品 + 风控打分
+python tools/promo.py list                             # 看候选（! 表示中高风险）
+python tools/promo.py approve <id> [--force]           # 人工审批
+python tools/promo.py run --live                       # 转存 + 再分享（不加 --live 是演练）
+python tools/promo.py dashboard                        # 生成 data/promo.html 管控台
+```
+
+**四道闸，缺一不可**
+
+| 闸门 | 作用 |
+|---|---|
+| 类型白名单 | 默认只放课程/电子书/软件/音乐；**影视默认拦**（版权风险最高，最容易封号） |
+| 违禁词库 | 命中即 `blocked`，人工也批不了（要放行只能改 `promo_rules.json`） |
+| 提醒词 | 破解/激活/内部资料这类标 `medium`，必须 `--force` 明确确认 |
+| 日限额 | 默认每天 30 条，防止账号被判定为机器行为 |
+
+状态机：`candidate → approved → transferring → transferred → sharing → live`（失败落 `failed`，全记录在 `data/promo.json`）。
+
+**需要配置**
+
+- `QUARK_COOKIE`：浏览器登录夸克后复制整条 Cookie，存到仓库 Secrets。**等同账号凭证**，别外传。
+- `promo_rules.json` 里的 `affiliate`：夸克的佣金**不是靠分享链接本身**计，要走渠道参数。
+  把渠道后台给你的落地页/参数填进去，`enabled=true` 后管控台会自动生成带参数的分发链接。
+
 ## 链接巡检
 
 ```bash
