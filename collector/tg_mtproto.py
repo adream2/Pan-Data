@@ -36,6 +36,17 @@ LINKS = DATA / "links.jsonl"
 STATE = DATA / "mtproto_state.json"
 
 
+def load_local_env() -> None:
+    """本地跑的时候从 .env.mtproto 读凭证（Actions 里直接用 Secrets）。"""
+    path = ROOT / ".env.mtproto"
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.strip().startswith("#"):
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+
+
 def parse_proxy(value: str | None):
     """支持 socks5://host:port 与 http://host:port；没配就直连（Actions 里直连可用）。"""
     if not value:
@@ -94,6 +105,7 @@ def build_rows(msg_text: str, channel: str, msg_id: int, posted_at: str | None) 
 
 
 async def run(args) -> int:
+    load_local_env()
     try:
         from telethon import TelegramClient  # noqa: F401
         from telethon.errors import FloodWaitError
@@ -154,10 +166,13 @@ async def run(args) -> int:
                 failed.append((channel, type(exc).__name__))
                 print(f"  ✗ {channel:<18} 无法解析（{type(exc).__name__}）")
                 continue
+            # 注意：min_id=None 会让 Telethon 内部比较时报 TypeError（且被外层吞掉），
+            # 所以只在有水位时才传这个参数
+            kwargs = {"limit": args.limit or None, "reverse": False}
+            if last_id:
+                kwargs["min_id"] = last_id
             try:
-                async for msg in client.iter_messages(
-                    entity, limit=args.limit or None, min_id=last_id or None, reverse=False
-                ):
+                async for msg in client.iter_messages(entity, **kwargs):
                     if not msg.message:
                         continue
                     scanned += 1
@@ -171,7 +186,7 @@ async def run(args) -> int:
                 await asyncio.sleep(exc.seconds + 5)
             except Exception as exc:
                 failed.append((channel, type(exc).__name__))
-                print(f"  ! {channel:<18} 读取中断（{type(exc).__name__}）")
+                print(f"  ! {channel:<18} 读取中断（{type(exc).__name__}: {str(exc)[:40]}）")
             fresh = [r for r in new_rows if r["id"] not in seen]
             for r in fresh:
                 seen.add(r["id"])
