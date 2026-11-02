@@ -275,6 +275,25 @@ def nearest_code(codes: list[tuple[int, str]], pos: int, limit: int = 200) -> st
     return best if best_dist <= limit else None
 
 
+META_PAIR_RE = re.compile(r"(\w+)\s*=\s*(\d+)")
+
+
+def channel_meta(raw: str) -> dict:
+    """解析行尾注释里的参数，如 `leoziyuan  # 高产 deep=2000`。"""
+    _, _, comment = raw.partition("#")
+    return {k: int(v) for k, v in META_PAIR_RE.findall(comment)}
+
+
+def load_channel_config(path) -> list[tuple[str, dict]]:
+    """读频道清单，返回 [(频道名, {deep:2000})]。"""
+    out: list[tuple[str, dict]] = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        name = norm_channel(line)
+        if name:
+            out.append((name, channel_meta(line)))
+    return out
+
+
 def iter_link_variants(line: str):
     """一行文本可能把真链藏在 URL 编码或 ?url= 之类的跳转参数里，展开后再匹配。"""
     yield line

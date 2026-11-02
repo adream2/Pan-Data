@@ -104,6 +104,29 @@ def build_rows(msg_text: str, channel: str, msg_id: int, posted_at: str | None) 
     return rows
 
 
+def channel_depth(meta: dict, st: dict, default: int) -> int:
+    """按频道产出率决定回溯深度：`# deep=N` 显式指定优先，其次看历史产出率。
+
+    产出率 = 累计入库链接 / 累计扫描消息。高产号给 1500-2000 条，纯引流号只给 120 条。
+    """
+    if meta.get("deep"):
+        return int(meta["deep"])
+    if not default:
+        return 0
+    scanned = int(st.get("scanned") or 0)
+    links = int(st.get("links") or 0)
+    if scanned < 50:
+        return default
+    rate = links * 100.0 / scanned
+    if rate >= 40:
+        return max(default, 1500)
+    if rate >= 15:
+        return max(default, 800)
+    if rate >= 5:
+        return max(default, 300)
+    return min(default, 120)
+
+
 async def run(args) -> int:
     load_local_env()
     try:
@@ -121,17 +144,19 @@ async def run(args) -> int:
         print("缺少 TG_API_ID / TG_API_HASH / TG_SESSION（先跑 tools/tg_login.py）", file=sys.stderr)
         return 2
 
-    channels = []
     if args.channels:
-        raw = args.channels.split(",")
+        channels = [(c, {}) for c in (tg.norm_channel(x) for x in args.channels.split(",")) if c]
     else:
-        raw = (ROOT / "collector" / "channels.txt").read_text(encoding="utf-8").splitlines()
-    channels = [c for c in (tg.norm_channel(x) for x in raw) if c]
+        channels = tg.load_channel_config(ROOT / "collector" / "channels.txt")
     if args.extra_file:
         extra = Path(args.extra_file)
         if extra.exists():
-            channels += [c for c in (tg.norm_channel(x) for x in extra.read_text(encoding="utf-8").splitlines()) if c]
-    channels = list(dict.fromkeys(channels))
+            channels += tg.load_channel_config(extra)
+    # 同一个频道出现两次时保留带 meta 的那份
+    merged: dict[str, dict] = {}
+    for name, meta in channels:
+        merged[name] = {**merged.get(name, {}), **meta}
+    channels = list(merged.items())
 
     def channel_state(ch: str) -> dict:
         value = state.get(ch)
@@ -162,9 +187,11 @@ async def run(args) -> int:
     async with TelegramClient(string_session, int(api_id), api_hash, proxy=proxy) as client:
         me = await client.get_me()
         print(f"登录身份：{getattr(me, 'username', None) or me.id}")
-        for channel in channels:
+        for channel, meta in channels:
             st = channel_state(channel)
+            depth = channel_depth(meta, st, args.deep)
             last_id = st["last_id"]
+            ch_scanned = 0
             new_rows: list[dict] = []
             try:
                 entity = await client.get_entity(channel)
@@ -179,8 +206,8 @@ async def run(args) -> int:
             # 两种模式：
             #   --deep N  → 从游标往历史深处翻（MTProto 独有的价值）
             #   默认      → 从水位往上取新消息
-            kwargs = {"limit": args.deep or args.limit or None, "reverse": False}
-            if args.deep:
+            kwargs = {"limit": depth or args.limit or None, "reverse": False}
+            if depth:
                 cursor = st.get("backfill_before") or last_id
                 if cursor:
                     kwargs["max_id"] = int(cursor)
@@ -191,11 +218,12 @@ async def run(args) -> int:
                     if not msg.message:
                         continue
                     scanned += 1
+                    ch_scanned += 1
                     posted = msg.date.astimezone(timezone.utc).isoformat(timespec="seconds") if msg.date else None
                     new_rows.extend(build_rows(msg.message, channel, msg.id, posted))
                     if msg.id > last_id:
                         last_id = msg.id
-                    if args.deep:
+                    if depth:
                         prev = st.get("backfill_before")
                         st["backfill_before"] = msg.id - 1 if prev is None else min(prev, msg.id - 1)
             except FloodWaitError as exc:
@@ -211,8 +239,10 @@ async def run(args) -> int:
             rows.extend(fresh)
             added += len(fresh)
             st["last_id"] = last_id
+            st["scanned"] = int(st.get("scanned") or 0) + ch_scanned
+            st["links"] = int(st.get("links") or 0) + len(fresh)
             state[channel] = st
-            cursor_note = f"｜回溯游标 {st['backfill_before']}" if args.deep else ""
+            cursor_note = f"｜回溯 {depth} 条｜游标 {st['backfill_before']}" if depth else ""
             print(f"  ✓ {channel:<18} 新链接 {len(fresh):>4}｜水位 {last_id}{cursor_note}")
             await asyncio.sleep(args.sleep + random.random())
 
