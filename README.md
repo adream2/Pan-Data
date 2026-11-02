@@ -121,6 +121,26 @@ python tools/probe_channels.py --proxy http://127.0.0.1:7890
 当前 894 条链接 → **698 个资源**：重复 179、旧版本 17；最大一组「走马上任」14 个来源、跨 6 个频道。
 采集和巡检跑完都会自动重算（巡检改了链接状态，当前版本可能换人）。
 
+## MTProto 冲量（推荐开）
+
+网页预览有两个绕不过的硬伤：频道关了预览就完全抓不到（实测 `naclzy`、`yespojie` 等一批号返回 11KB 空页），
+历史深度也有限。MTProto 用账号直连，这两条都绕开，而且能秒级追新。
+
+**开通步骤（一次性，5 分钟）**
+
+1. 打开 https://my.telegram.org/apps 建一个应用，拿 `api_id` / `api_hash`
+2. 本地跑 `pip install telethon python-socks` 然后 `python tools/tg_login.py`
+   （交互式输手机号 + 验证码，成功后写 `.env.mtproto`，已 gitignore）
+3. 仓库 Settings → Secrets 加三个：`TG_API_ID`、`TG_API_HASH`、`TG_SESSION`
+4. Actions → `mtproto` → Run workflow，`limit` 填 `500` 做一次历史回填；之后每 15 分钟自动追新
+
+**注意**
+
+- `TG_SESSION` 等同于账号登录凭证，泄露等于账号被接管。**别用主号**，建议小号。
+- 频道清单在 `collector/channels.txt`，网页抓不到的号另放 `collector/mtproto_channels.txt`。
+- 解析失败/限流不会中断：失败频道会列在日志末尾，`FloodWait` 会按 Telegram 要求等待。
+- 增量靠 `data/mtproto_state.json` 记录每个频道的水位（最大消息 ID），不会重复入库。
+
 ## 链接巡检
 
 ```bash

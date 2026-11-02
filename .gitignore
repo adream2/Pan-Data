@@ -3,3 +3,5 @@ __pycache__/
 .tmp/
 preview.html
 data/
+.env.mtproto
+.env

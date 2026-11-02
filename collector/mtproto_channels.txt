@@ -1,0 +1,7 @@
+# MTProto 专用频道：网页预览抓不到（t.me/s 返回空页），但账号能看
+# 探针实测这些号 t.me/s 返回 ~11KB 无消息页，网页采集永远拿不到
+naclzy
+yespojie
+quark_share_group
+share_pan
+movies12138
