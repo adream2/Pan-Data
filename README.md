@@ -6,8 +6,33 @@
 ## 快速开始
 
 1. 编辑 `collector/channels.txt`，每行一个公开频道（`@name` 或 `t.me/name` 都行）。
-2. 推到 GitHub 仓库，打开 Actions → `tg-collect` → Run workflow，`pages` 填 `15` 先建库。
-3. 之后每 30 分钟自动跑一次，只抓最新一页，增量写回 `data/links.jsonl`。
+2. 推到 GitHub 仓库，打开 Actions → `collect` → Run workflow，`pages` 填 `20` 先建库。
+3. 之后每 30 分钟自动采集（`collect`），每天自动巡检（`check`），跑完都会重新导出契约并提交。
+
+> 云端如果直连不了 `t.me`，在仓库 Secrets 里加 `TG_PROXY=http://user:pass@host:port`，两个 workflow 都会用。
+
+## 对外契约
+
+**只认 `data/resources.json`**，格式见 [`SCHEMA.md`](SCHEMA.md)（v1.0）。
+
+```bash
+python tools/export.py          # 内部 links.jsonl -> 对外 resources.json
+curl -s .../main/data/resources.json | jq '.counts'
+```
+
+- 只导出「当前版本」，894 条链接收敛成 698 个资源
+- 字段顺序固定，带 `schema_version`，改字段必须升版本
+- `mirrors` 给出同资源的备用盘链接（夸克挂了换百度）
+- 内部 `data/links.jsonl` 是工作数据，随时会变，别对外承诺
+
+## 自动化
+
+| workflow | 频率 | 干什么 |
+|---|---|---|
+| `collect.yml` | 每 30 分钟（:07/:37） | 抓新消息 → 归一/分组 → 导出 → 提交 |
+| `check.yml` | 每天 03:23 UTC | 巡检 7 天前查过的链接 → 重算当前版本 → 导出 → 提交 |
+
+两个 job 共用 `concurrency: pan-data`，不会互相踩。首次建库用 `workflow_dispatch` 把 `pages` 填 20。
 
 本地跑（纯标准库，零依赖）：
 
