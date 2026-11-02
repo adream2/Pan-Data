@@ -1,0 +1,68 @@
+name: compact
+
+on:
+  schedule:
+    - cron: "0 5 1 1 *"        # 每年 1 月 1 日 05:00 UTC
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "要梳理的年份（留空 = 上一年）"
+        default: ""
+      apply:
+        description: "true = 真的删失效记录，false = 只体检"
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pan-data
+  cancel-in-progress: false
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore data branch
+        run: |
+          git fetch --depth 1 origin data || true
+          if git rev-parse --verify -q origin/data >/dev/null; then
+            git archive origin/data data | tar -x -C "$GITHUB_WORKSPACE"
+          else
+            echo "没有历史数据，退出"; exit 1
+          fi
+
+      - name: Compact
+        run: |
+          YEAR="${{ github.event.inputs.year }}"
+          if [ -z "$YEAR" ]; then YEAR=$(( $(date -u +%Y) - 1 )); fi
+          echo "梳理年份：$YEAR"
+          if [ "${{ github.event.inputs.apply }}" = "true" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            python tools/compact.py --year "$YEAR" --apply --re-export
+          else
+            python tools/compact.py --year "$YEAR"
+          fi
+
+      - name: Publish data branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/datarepo && cd /tmp/datarepo
+          git init -q -b data
+          mkdir -p data
+          cp -r "$GITHUB_WORKSPACE/data/." data/
+          rm -f data/*.tmp
+          git add -A
+          git commit -q -m "data: yearly compact $(date -u +%FT%TZ)"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin data

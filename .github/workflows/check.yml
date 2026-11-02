@@ -34,11 +34,11 @@ jobs:
         run: |
           git fetch --depth 1 origin data || true
           if git rev-parse --verify -q origin/data >/dev/null; then
-            mkdir -p data
-            git show origin/data:data/links.jsonl   > data/links.jsonl   2>/dev/null || true
-            git show origin/data:data/resources.json > data/resources.json 2>/dev/null || true
+            git archive origin/data data | tar -x -C "$GITHUB_WORKSPACE"
+            echo "已恢复历史数据"
+          else
+            echo "首次运行，无历史数据"
           fi
-          wc -l data/links.jsonl 2>/dev/null || echo "首次运行，无历史数据"
 
       - name: Check links
         env:
@@ -52,6 +52,15 @@ jobs:
       - name: Export contract
         run: python tools/export.py
 
+      - name: Verify
+        run: |
+          python - <<'PY'
+          import json
+          idx = json.load(open("data/index.json", encoding="utf-8"))
+          print("hot/全量:", json.load(open("data/resources.json", encoding="utf-8"))["counts"], idx["totals"])
+          assert idx["totals"]["shards"] >= 1, "分片缺失"
+          PY
+
       - name: Publish data branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,10 +68,11 @@ jobs:
           set -e
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p /tmp/datarepo/data && cd /tmp/datarepo
+          mkdir -p /tmp/datarepo && cd /tmp/datarepo
           git init -q -b data
-          cp "$GITHUB_WORKSPACE/data/links.jsonl"   data/links.jsonl
-          cp "$GITHUB_WORKSPACE/data/resources.json" data/resources.json
+          mkdir -p data
+          cp -r "$GITHUB_WORKSPACE/data/." data/
+          rm -f data/*.tmp
           git add -A
           git commit -q -m "data: $(date -u +%FT%TZ)"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"

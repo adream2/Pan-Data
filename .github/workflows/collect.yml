@@ -34,11 +34,12 @@ jobs:
         run: |
           git fetch --depth 1 origin data || true
           if git rev-parse --verify -q origin/data >/dev/null; then
-            mkdir -p data
-            git show origin/data:data/links.jsonl   > data/links.jsonl   2>/dev/null || true
-            git show origin/data:data/resources.json > data/resources.json 2>/dev/null || true
+            git archive origin/data data | tar -x -C "$GITHUB_WORKSPACE"
+            echo "已恢复历史数据"
+            du -sh data || true
+          else
+            echo "首次运行，无历史数据"
           fi
-          wc -l data/links.jsonl 2>/dev/null || echo "首次运行，无历史数据"
 
       - name: Collect
         env:
@@ -56,11 +57,13 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          idx = json.load(open("data/index.json", encoding="utf-8"))
           d = json.load(open("data/resources.json", encoding="utf-8"))
           assert d["schema_version"].startswith("1."), "schema 版本不符"
-          assert d["counts"]["resources"] > 0, "资源为空"
+          assert d["counts"]["resources"] > 0, "热文件为空"
           assert d["counts"]["window_days"] > 0, "缺少时间窗，文件会无限膨胀"
-          print("resources:", d["counts"])
+          assert idx["totals"]["shards"] >= 1, "分片缺失"
+          print("hot:", d["counts"]["resources"], "| 全量:", idx["totals"])
           PY
 
       - name: Publish data branch
@@ -70,21 +73,13 @@ jobs:
           set -e
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p /tmp/datarepo/data && cd /tmp/datarepo
+          mkdir -p /tmp/datarepo && cd /tmp/datarepo
           git init -q -b data
-          cp "$GITHUB_WORKSPACE/data/links.jsonl"   data/links.jsonl
-          cp "$GITHUB_WORKSPACE/data/resources.json" data/resources.json
+          mkdir -p data
+          cp -r "$GITHUB_WORKSPACE/data/." data/
+          rm -f data/*.tmp
           git add -A
           git commit -q -m "data: $(date -u +%FT%TZ)"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push -f origin data
           echo "已发布 ${{ github.server_url }}/${GITHUB_REPOSITORY}/tree/data"
-
-      - name: Upload log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: collect-log
-          path: |
-            data/links.jsonl
-          retention-days: 3

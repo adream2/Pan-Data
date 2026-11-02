@@ -2,6 +2,4 @@ __pycache__/
 *.pyc
 .tmp/
 preview.html
-data/*.json
-data/*.jsonl
-data/*.tmp
+data/

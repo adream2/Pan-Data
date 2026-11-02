@@ -13,10 +13,12 @@
 
 ## 对外契约
 
-**只认 `data` 分支的 `resources.json`**，格式见 [`SCHEMA.md`](SCHEMA.md)（v1.1）。
+**只认 `data` 分支的 `index.json`**，格式见 [`SCHEMA.md`](SCHEMA.md)（v1.2）。
 
 ```
-https://raw.githubusercontent.com/adream2/Pan-Data/data/data/resources.json
+https://raw.githubusercontent.com/adream2/Pan-Data/data/data/index.json      # 清单（几 KB）
+https://raw.githubusercontent.com/adream2/Pan-Data/data/data/resources.json  # 热数据（最近 90 天）
+https://raw.githubusercontent.com/adream2/Pan-Data/data/data/shards/2026-Q4.json  # 库存分片
 ```
 
 ```bash
@@ -24,7 +26,7 @@ python tools/export.py                 # 默认 90 天窗口
 python tools/export.py --days 0        # 全量（本地排查用，别发布）
 ```
 
-- 只导出「当前版本」+ 最近 90 天：2802 条链接 → 1172 个资源 / 989 KB
+- 热文件：最近 90 天的当前版本资源；历史按季度切进 `data/shards/`，单个文件不会无限长
 - 体积可控：desc 截 100 字，超出窗口的不导出，稳态约 15MB 以内
 - 字段顺序固定，带 `schema_version`，改字段必须升版本
 - `mirrors` 给出同资源的备用盘链接（夸克挂了换百度）
@@ -36,8 +38,20 @@ python tools/export.py --days 0        # 全量（本地排查用，别发布）
 |---|---|---|
 | `collect.yml` | 每 30 分钟（:07/:37） | 抓新消息 → 归一/分组 → 导出 → 发布 `data` 分支 |
 | `check.yml` | 每天 03:23 UTC | 巡检 7 天前查过的链接 → 重算当前版本 → 导出 → 发布 `data` 分支 |
+| `compact.yml` | 每年 1 月 1 日 | 年度体检 + 清理失效超 30 天的记录 → 重新分片 |
 
 两个 job 共用 `concurrency: pan-data`，不会互相踩。首次建库用 `workflow_dispatch` 把 `pages` 填 20。
+
+## 体积策略
+
+三个层次的取舍：
+
+| 机制 | 作用 |
+|---|---|
+| 热文件 90 天 | 首屏只拉最近数据，1 MB 级 |
+| 季度分片 | 库存全留，单片封顶（`--shard month` 可再小到 1/3） |
+| 年度 compact | 清理失效超 30 天的死链，避免只增不减 |
+| data 分支滚动提交 | git 历史不累积，仓库体积 = 最新文件 |
 
 **数据为什么在独立分支**：数据是派生产物，每次全量重写。若跟着代码提交，每天 20 次 × 整文件 = 每月上百 MB 的 git 历史。
 `data` 分支每次用 `git push -f` 覆盖成**单条提交**，主仓永远干净，仓库体积只等于最新文件。
