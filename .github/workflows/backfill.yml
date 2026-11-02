@@ -1,0 +1,71 @@
+name: backfill
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"        # 每周一 06:00 UTC，深挖一轮补库存
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "每个频道回溯页数"
+        default: "20"
+      channels:
+        description: "临时频道，逗号分隔（留空则读 channels.txt）"
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pan-data
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore data branch
+        run: |
+          git fetch --depth 1 origin data || true
+          if git rev-parse --verify -q origin/data >/dev/null; then
+            git archive origin/data data | tar -x -C "$GITHUB_WORKSPACE"
+            echo "已恢复历史数据"
+          else
+            echo "首次运行，无历史数据"
+          fi
+
+      - name: Deep collect
+        env:
+          TG_PROXY: ${{ secrets.TG_PROXY }}
+        run: |
+          python collector/fetch_tg.py \
+            --pages "${{ github.event.inputs.pages || '20' }}" \
+            --channels "${{ github.event.inputs.channels }}" \
+            --sleep 1.2
+
+      - name: Export contract
+        run: python tools/export.py
+
+      - name: Publish data branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/datarepo && cd /tmp/datarepo
+          git init -q -b data
+          mkdir -p data
+          cp -r "$GITHUB_WORKSPACE/data/." data/
+          rm -f data/*.tmp
+          git add -A
+          git commit -q -m "data: backfill $(date -u +%FT%TZ)"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin data
+          echo "已发布 ${{ github.server_url }}/${GITHUB_REPOSITORY}/tree/data"
