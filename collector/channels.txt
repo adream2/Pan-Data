@@ -20,7 +20,7 @@ fuliziyuan
 shareAliyun
 yunpanxunlei
 yunpanuc
-XiangxiuNBB        # 高产  deep=1500
+XiangxiuNBB        # 实测 55 条/百条消息  deep=2000
 
 # --- 2026-11-02 从互推里挖出、探针验证有效 ---
 okpojie

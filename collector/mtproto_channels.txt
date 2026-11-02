@@ -1,7 +1,7 @@
-# MTProto 专用频道：网页预览抓不到（t.me/s 返回空页），但账号能看
-# 探针实测这些号 t.me/s 返回 ~11KB 无消息页，网页采集永远拿不到
-naclzy
-yespojie
-quark_share_group
-share_pan
-movies12138
+# MTProto 专用频道：网页预览抓不到（t.me/s 返回空页），只靠账号直连
+# deep= 是该频道的回溯深度；实测这几个号的历史里货很多，别按"封锁号"低看
+yespojie           # 实测产出 80 条/百条消息，最高的一个  deep=2500
+movies12138        # 52 条/百条  deep=2000
+share_pan          # 29 条/百条  deep=1500
+naclzy             # 3 条/百条，主要是引流  deep=400
+quark_share_group  # 极低  deep=200

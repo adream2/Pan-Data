@@ -118,7 +118,11 @@ def channel_depth(meta: dict, st: dict, default: int) -> int:
     if scanned < 50:
         return default
     rate = links * 100.0 / scanned
+    if rate >= 60:
+        return max(default, 2500)
     if rate >= 40:
+        return max(default, 2000)
+    if rate >= 30:
         return max(default, 1500)
     if rate >= 15:
         return max(default, 800)
