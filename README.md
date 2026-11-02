@@ -38,7 +38,7 @@ python tools/export.py --days 0        # 全量（本地排查用，别发布）
 |---|---|---|
 | `collect.yml` | 每 30 分钟（:07/:37） | 抓新消息 → 归一/分组 → 导出 → 发布 `data` 分支 |
 | `check.yml` | 每天 03:23 UTC | 巡检 7 天前查过的链接 → 重算当前版本 → 导出 → 发布 `data` 分支 |
-| `compact.yml` | 每年 1 月 1 日 | 年度体检 + 清理失效超 30 天的记录 → 重新分片 |
+| `compact.yml` | 每年 1 月 1 日 | 年度体检（只读）+ 可选清理失效记录 → 重新分片 |
 
 两个 job 共用 `concurrency: pan-data`，不会互相踩。首次建库用 `workflow_dispatch` 把 `pages` 填 20。
 
@@ -50,7 +50,7 @@ python tools/export.py --days 0        # 全量（本地排查用，别发布）
 |---|---|
 | 热文件 90 天 | 首屏只拉最近数据，1 MB 级 |
 | 季度分片 | 库存全留，单片封顶（`--shard month` 可再小到 1/3） |
-| 年度 compact | 清理失效超 30 天的死链，避免只增不减 |
+| 年度 compact | 体检 + 按需清理死链（默认不删，库存是资产） |
 | data 分支滚动提交 | git 历史不累积，仓库体积 = 最新文件 |
 
 **数据为什么在独立分支**：数据是派生产物，每次全量重写。若跟着代码提交，每天 20 次 × 整文件 = 每月上百 MB 的 git 历史。
@@ -64,6 +64,19 @@ python collector/fetch_tg.py --pages 3
 python collector/fetch_tg.py --pages 20 --proxy http://127.0.0.1:7890
 TG_PROXY=auto python collector/fetch_tg.py --pages 1   # 自动探测本机常见代理端口
 ```
+
+## 扩源（发现 → 探针 → 入库）
+
+三步走，别靠人肉找频道：
+
+```bash
+python tools/discover_channels.py --pages 3     # 1. 从已有频道的互推里挖候选
+python tools/probe_channels.py --file collector/discovered.txt   # 2. 探产出率
+# 3. 有产出的频道手动加进 collector/channels.txt（带行尾注释，norm_channel 会剥掉）
+```
+
+2026-11 实测：16 个种子频道挖出 12 个候选，8 个有产出（合计单页 207 条链接），
+`aliyun_4k_movies`、`netdisk_movies` 这类还带来了阿里云盘的新来源。
 
 ## 频道探针
 

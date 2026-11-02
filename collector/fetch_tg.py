@@ -252,7 +252,8 @@ def link_key(provider: str, url: str) -> str:
 
 
 def norm_channel(raw: str) -> str:
-    raw = raw.strip()
+    # 支持行尾注释：`freekecheng  # 高产，被提到 120 次`
+    raw = re.split(r"[#\s]", raw.strip(), maxsplit=1)[0]
     if not raw or raw.startswith("#"):
         return ""
     raw = re.sub(r"^https?://t\.me/", "", raw)

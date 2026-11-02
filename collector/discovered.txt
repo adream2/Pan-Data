@@ -1,0 +1,15 @@
+# 由 tools/discover_channels.py 从互推里挖出来的候选频道（按被提及次数排序）
+# 用 tools/probe_channels.py --file collector/discovered.txt 验一遍再决定要不要用
+
+naclzy  # 被提到 120 次
+okpojie  # 被提到 60 次
+softwaregods  # 被提到 60 次
+happyflims  # 被提到 60 次
+allgamegod  # 被提到 60 次
+allgirlhunter  # 被提到 60 次
+shortdramagod  # 被提到 60 次
+yespojie  # 被提到 60 次
+quark_share_group  # 被提到 28 次
+share_pan  # 被提到 8 次
+netdisk_movies  # 被提到 2 次
+aliyun_4k_movies  # 被提到 2 次

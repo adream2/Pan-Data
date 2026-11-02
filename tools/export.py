@@ -184,8 +184,8 @@ def main() -> int:
     ap.add_argument("--index", default=str(INDEX))
     ap.add_argument("--days", type=int, default=DEFAULT_DAYS,
                     help=f"热文件保留最近 N 天，0 = 全量（默认 {DEFAULT_DAYS}）")
-    ap.add_argument("--shard", choices=["quarter", "month"], default="quarter",
-                    help="全量库存分片粒度")
+    ap.add_argument("--shard", choices=["quarter", "month"], default="month",
+                    help="库存分片粒度；默认按月（单片约 5MB，季度会到 14MB）")
     ap.add_argument("--no-shards", action="store_true", help="只出热文件")
     ap.add_argument("--pretty", action="store_true")
     args = ap.parse_args()

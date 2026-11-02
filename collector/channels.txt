@@ -1,6 +1,8 @@
-# 正式采集清单（探针实测有效才写进来）
-# 探针：python tools/probe_channels.py --file collector/seed_channels.txt
-# bdyunpan 已剔除：2026-11 实测只剩 2 条消息，已停更
+# 正式采集清单。探针实测有效才写进来（每行：频道名 + 可选行尾注释）
+# 探针：python tools/probe_channels.py --file <清单> --proxy ...
+# 发现：python tools/discover_channels.py --pages 3   （从互推里挖新频道）
+
+# --- 首批（netdisk-spider 清单 + 自己发现）---
 freekecheng
 PanjClub
 Quark_Movies
@@ -18,3 +20,20 @@ shareAliyun
 yunpanxunlei
 yunpanuc
 XiangxiuNBB
+
+# --- 2026-11-02 从互推里挖出、探针验证有效 ---
+okpojie
+softwaregods
+happyflims
+allgamegod
+allgirlhunter
+shortdramagod
+netdisk_movies
+aliyun_4k_movies
+
+# --- 探针无产出，暂不采集（留档）---
+# naclzy            → 0 条消息（网页预览受限）
+# yespojie          → 0 条消息
+# quark_share_group → 0 条消息
+# share_pan         → 0 条消息
+# bdyunpan          → 已停更

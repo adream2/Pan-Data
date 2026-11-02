@@ -44,7 +44,8 @@ jobs:
           YEAR="${{ github.event.inputs.year }}"
           if [ -z "$YEAR" ]; then YEAR=$(( $(date -u +%Y) - 1 )); fi
           echo "梳理年份：$YEAR"
-          if [ "${{ github.event.inputs.apply }}" = "true" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+          # 定时任务只体检不删数据：库存本身就是资产，删除必须人工确认
+          if [ "${{ github.event.inputs.apply }}" = "true" ]; then
             python tools/compact.py --year "$YEAR" --apply --re-export
           else
             python tools/compact.py --year "$YEAR"
