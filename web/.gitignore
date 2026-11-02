@@ -3,3 +3,5 @@ __pycache__/
 *.sqlite-*
 storage/
 src/config.local.php
+node_modules/
+package-lock.json

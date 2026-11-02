@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@source "../public/**/*.php";
+@source "../src/views/**/*.php";
+
+@theme {
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-brand-50: oklch(0.97 0.02 250);
+  --color-brand-100: oklch(0.94 0.04 250);
+  --color-brand-500: oklch(0.62 0.16 255);
+  --color-brand-600: oklch(0.55 0.17 255);
+  --color-brand-700: oklch(0.47 0.15 255);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-neutral-50 text-neutral-900 antialiased;
+  }
+  ::selection {
+    @apply bg-brand-100 text-brand-700;
+  }
+}
+
+@layer components {
+  .card-surface {
+    @apply rounded-xl bg-white ring-1 ring-neutral-200/80 transition
+           hover:ring-neutral-300 hover:shadow-[0_4px_16px_-8px_rgba(0,0,0,0.12)];
+  }
+  .input {
+    @apply h-10 w-full rounded-lg border-0 bg-white px-3.5 text-sm text-neutral-900
+           ring-1 ring-neutral-200 placeholder:text-neutral-400
+           focus:ring-2 focus:ring-brand-500 focus:outline-none;
+  }
+  .btn {
+    @apply inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-neutral-900 px-4
+           text-sm font-medium text-white transition hover:bg-neutral-800
+           focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none;
+  }
+  .btn-soft {
+    @apply inline-flex h-8 items-center gap-1 rounded-md bg-white px-2.5 text-xs font-medium
+           text-neutral-600 ring-1 ring-neutral-200 transition hover:bg-neutral-50 hover:text-neutral-900;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs
+           text-neutral-600 ring-1 ring-neutral-200 transition hover:text-neutral-900 hover:ring-neutral-300;
+  }
+  .chip-active {
+    @apply bg-neutral-900 text-white ring-neutral-900 hover:text-white;
+  }
+  .stat-dot {
+    @apply inline-block size-1.5 rounded-full bg-neutral-300;
+  }
+}
+
+@layer utilities {
+  .clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

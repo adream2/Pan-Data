@@ -100,6 +100,21 @@ server {
 
 目录权限：`storage/` 需要 web 用户可写（SQLite + 限流文件）。
 
+## 样式构建（Tailwind CSS 4）
+
+界面用 Tailwind 工具类编写，产物已提交（`public/assets/app.css`，约 31KB），**部署不需要 Node**。
+
+改样式才需要：
+
+```bash
+npm install          # 只装 devDependencies（tailwindcss + CLI）
+npm run build        # 一次性编译 + 压缩
+npm run dev          # 监听改动自动重编译
+```
+
+源文件：`src/styles.css`（`@theme` 定义品牌色，`@layer components` 定义 `.card/.btn/.chip/.input` 等复用类）。
+新增页面时 Tailwind 会自动扫描 `public/**/*.php` 和 `src/views/**/*.php`，不用手动维护 safelist。
+
 ## 目录结构
 
 ```

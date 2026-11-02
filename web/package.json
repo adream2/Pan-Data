@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "name": "pansou-web",
+  "private": true,
+  "description": "盘搜前端样式构建（Tailwind CSS 4）",
+  "scripts": {
+    "build": "tailwindcss -i src/styles.css -o public/assets/app.css --minify",
+    "dev": "tailwindcss -i src/styles.css -o public/assets/app.css --watch"
+  }
+}
