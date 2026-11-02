@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import hashlib
 import json
 import re
@@ -130,17 +131,20 @@ def period_of(row: dict, mode: str) -> str:
 
 
 def period_range(period: str) -> tuple[str, str]:
+    """返回周期的起止日期（含当月最后一天，别写出 09-31 这种不存在的日期）。"""
     m = re.fullmatch(r"(\d{4})-Q([1-4])", period)
     if m:
         year, quarter = int(m.group(1)), int(m.group(2))
         start_month = (quarter - 1) * 3 + 1
         end_month = start_month + 2
-        return f"{year}-{start_month:02d}-01", f"{year}-{end_month:02d}-31"
-    m = re.fullmatch(r"(\d{4})-(\d{2})", period)
-    if m:
-        year, month = int(m.group(1)), int(m.group(2))
-        return f"{year}-{month:02d}-01", f"{year}-{month:02d}-31"
-    return "", ""
+    else:
+        m = re.fullmatch(r"(\d{4})-(\d{2})", period)
+        if not m:
+            return "", ""
+        year, start_month = int(m.group(1)), int(m.group(2))
+        end_month = start_month
+    last_day = calendar.monthrange(year, end_month)[1]
+    return f"{year}-{start_month:02d}-01", f"{year}-{end_month:02d}-{last_day:02d}"
 
 
 def envelope(payload_resources: list[dict], **extra) -> dict:
