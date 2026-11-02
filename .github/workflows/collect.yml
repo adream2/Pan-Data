@@ -47,8 +47,9 @@ jobs:
           python - <<'PY'
           import json
           d = json.load(open("data/resources.json", encoding="utf-8"))
-          assert d["schema_version"] == "1.0", "schema 版本不符"
+          assert d["schema_version"].startswith("1."), "schema 版本不符"
           assert d["counts"]["resources"] > 0, "资源为空"
+          assert d["counts"]["window_days"] > 0, "缺少时间窗，文件会无限膨胀"
           print("resources:", d["counts"])
           PY
 
