@@ -170,12 +170,41 @@ $landingSpec = $landingSlug !== null ? seo_landing($landingSlug) : null;
   <?php endif; ?>
 
   <?php if ((string) $row['post_url'] !== '' || (string) $row['channel'] !== ''): ?>
-  <p class="mt-4 px-1 text-[11px] text-gray-400">
-    <?php if ((string) $row['channel'] !== ''): ?>来源频道 <?= e((string) $row['channel']) ?><?php endif; ?>
+  <p class="mt-4 flex flex-wrap items-center gap-x-2 px-1 text-[11px] text-gray-400">
+    <?php if ((string) $row['channel'] !== ''): ?>
+      <span>来源频道
+        <a class="text-blue-600 hover:underline" href="/c/<?= e((string) $row['channel']) ?>">@<?= e((string) $row['channel']) ?></a>
+      </span>
+    <?php endif; ?>
     <?php if ((string) $row['post_url'] !== ''): ?>
-      · <a class="hover:underline" href="<?= e((string) $row['post_url']) ?>" target="_blank" rel="nofollow noopener">查看原帖</a>
+      <span class="text-gray-300">·</span>
+      <a class="hover:underline" href="<?= e((string) $row['post_url']) ?>" target="_blank" rel="nofollow noopener">查看原帖</a>
     <?php endif; ?>
   </p>
+  <?php endif; ?>
+
+  <?php if (!empty($channelMore)): ?>
+  <section class="mt-6" aria-label="同频道其他资源">
+    <div class="mb-2 flex items-baseline justify-between px-1">
+      <h2 class="text-sm font-medium text-gray-700">@<a class="hover:underline" href="/c/<?= e((string) $row['channel']) ?>"><?= e((string) $row['channel']) ?></a> 发布的其他资源</h2>
+      <a class="text-[11px] text-blue-600 hover:underline" href="/c/<?= e((string) $row['channel']) ?>">全部 →</a>
+    </div>
+    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <?php foreach ($channelMore as $r): ?>
+        <a class="flex items-start gap-2 rounded-lg bg-white p-3 shadow-sm transition hover:shadow-md"
+           href="<?= e(seo_detail_path((string) $r['id'])) ?>">
+          <span class="min-w-0 flex-1">
+            <span class="clamp-2 block text-sm leading-snug text-gray-800"><?= e(ui_clean_title((string) $r['title'])) ?></span>
+            <span class="mt-1 block text-[11px] text-gray-400">
+              <?= e(ui_provider_name((string) $r['provider'])) ?>
+              · <?= e(ui_type_name((string) $r['type'])) ?>
+              · <?= e(ui_rel_time($r['posted_at'])) ?>
+            </span>
+          </span>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  </section>
   <?php endif; ?>
 
   <?php if ($related !== []): ?>

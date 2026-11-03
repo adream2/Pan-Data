@@ -400,3 +400,143 @@ function repo_versions(string $coreTitle, int $limit = 12): array
     }
     return $rows;
 }
+
+/* ------------------------------------------------------------------ */
+/* 频道（来源）维度                                                     */
+/* ------------------------------------------------------------------ */
+
+/** 频道名只允许字母数字下划线短横，防止进 URL 或 SQL 时出问题 */
+function repo_channel_slug(string $raw): string
+{
+    return preg_replace('/[^A-Za-z0-9_\-]/', '', $raw) ?? '';
+}
+
+/**
+ * 全部频道及其规模。
+ * 这些频道是内容的真实来源，做成落地页既是给用户看「这个号靠不靠谱」，
+ * 也是站内最大的一块内链枢纽。
+ *
+ * @return array<int,array{channel:string,resources:int,platforms:int,types:int,latest:string,earliest:string,invalid:int}>
+ */
+function repo_channels(int $limit = 200): array
+{
+    $limit = max(1, min($limit, 500));
+    $sql = "SELECT channel,
+                   COUNT(*) AS resources,
+                   COUNT(DISTINCT provider) AS platforms,
+                   COUNT(DISTINCT type) AS types,
+                   MAX(posted_at) AS latest,
+                   MIN(posted_at) AS earliest,
+                   SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END) AS invalid
+            FROM resources
+            WHERE hidden = 0 AND channel != ''
+            GROUP BY channel
+            ORDER BY resources DESC
+            LIMIT " . $limit;
+    return db()->query($sql)->fetchAll();
+}
+
+/** 单个频道的汇总；不存在返回 null */
+function repo_channel(string $channel): ?array
+{
+    $slug = repo_channel_slug($channel);
+    if ($slug === '') {
+        return null;
+    }
+    $stmt = db()->prepare(
+        "SELECT channel,
+                COUNT(*) AS resources,
+                COUNT(DISTINCT provider) AS platforms,
+                COUNT(DISTINCT type) AS types,
+                MAX(posted_at) AS latest,
+                MIN(posted_at) AS earliest,
+                SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END) AS invalid
+         FROM resources
+         WHERE hidden = 0 AND channel = ?
+         GROUP BY channel"
+    );
+    $stmt->execute([$slug]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/** 频道内的资源（分页） */
+function repo_channel_search(string $channel, int $page = 1, int $per = 20): array
+{
+    $slug = repo_channel_slug($channel);
+    $per = max(1, min($per, 100));
+    $page = max(1, $page);
+    $offset = ($page - 1) * $per;
+
+    $stmt = db()->prepare('SELECT COUNT(*) FROM resources WHERE hidden = 0 AND channel = ?');
+    $stmt->execute([$slug]);
+    $total = (int) $stmt->fetchColumn();
+
+    $stmt = db()->prepare(
+        'SELECT * FROM resources WHERE hidden = 0 AND channel = ?
+         ORDER BY posted_at DESC, id ASC LIMIT ' . $per . ' OFFSET ' . $offset
+    );
+    $stmt->execute([$slug]);
+
+    return [
+        'items' => $stmt->fetchAll(),
+        'total' => $total,
+        'page'  => $page,
+        'pages' => max(1, (int) ceil($total / $per)),
+        'per'   => $per,
+    ];
+}
+
+/** 频道内的类型分布，用于落地页给人看「这个号主要发什么」 */
+function repo_channel_types(string $channel): array
+{
+    $stmt = db()->prepare(
+        "SELECT type, COUNT(*) c FROM resources
+         WHERE hidden = 0 AND channel = ? GROUP BY type ORDER BY c DESC"
+    );
+    $stmt->execute([repo_channel_slug($channel)]);
+    return $stmt->fetchAll();
+}
+
+/** 频道内的平台分布 */
+function repo_channel_providers(string $channel): array
+{
+    $stmt = db()->prepare(
+        'SELECT provider, COUNT(*) c FROM resources
+         WHERE hidden = 0 AND channel = ? GROUP BY provider ORDER BY c DESC'
+    );
+    $stmt->execute([repo_channel_slug($channel)]);
+    return $stmt->fetchAll();
+}
+
+/** 同频道的其他资源（详情页用，排除当前条） */
+function repo_channel_more(string $channel, string $excludeId, int $limit = 6): array
+{
+    $slug = repo_channel_slug($channel);
+    if ($slug === '') {
+        return [];
+    }
+    $limit = max(1, min($limit, 20));
+    $stmt = db()->prepare(
+        'SELECT * FROM resources
+         WHERE hidden = 0 AND channel = ? AND id != ?
+         ORDER BY posted_at DESC LIMIT ' . $limit
+    );
+    $stmt->execute([$slug, $excludeId]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * 频道的主打类型：优先非 other 且占比 ≥15% 的那一类。
+ * 「内容以其它为主」这种描述对读者没信息量，宁可退到第二类。
+ */
+function repo_channel_lead_type(array $types, int $total): ?array
+{
+    $total = max(1, $total);
+    foreach ($types as $t) {
+        if ((string) $t['type'] !== 'other' && (int) $t['c'] * 100.0 / $total >= 15) {
+            return $t;
+        }
+    }
+    return $types[0] ?? null;
+}

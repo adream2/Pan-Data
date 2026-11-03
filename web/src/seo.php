@@ -225,6 +225,15 @@ function seo_meta_for(array $ctx): array
                 'robots'    => 'index, follow, max-image-preview:large',
             ];
 
+        case 'channel':
+            return [
+                'canonical' => seo_abs('/c/' . (string) ($ctx['channel'] ?? '') . $pageQs),
+                'robots'    => 'index, follow, max-image-preview:large',
+            ];
+
+        case 'channels':
+            return ['canonical' => seo_abs('/channels'), 'robots' => 'index, follow'];
+
         case 'updates':
             // 只有默认 7 天版本参与索引，其余参数页权重合并过去
             $days = (int) ($ctx['days'] ?? 7);
@@ -412,12 +421,28 @@ function seo_sitemap_core(): array
         ['loc' => seo_abs('/'), 'lastmod' => $today, 'changefreq' => 'hourly', 'priority' => '1.0'],
         ['loc' => seo_abs('/updates'), 'lastmod' => $today, 'changefreq' => 'hourly', 'priority' => '0.9'],
     ];
+    $out[] = ['loc' => seo_abs('/channels'), 'lastmod' => $today, 'changefreq' => 'daily', 'priority' => '0.8'];
+
     foreach (seo_landings() as $slug => $spec) {
         $out[] = [
             'loc' => seo_abs('/' . $slug), 'lastmod' => $today,
             'changefreq' => 'daily', 'priority' => '0.8',
         ];
     }
+
+    // 频道页：每个都是独立内容（收录量、构成、节奏都不同），值得进 sitemap
+    if (function_exists('repo_channels')) {
+        foreach (repo_channels(200) as $i => $c) {
+            $lm = (string) ($c['latest'] ?? '');
+            $out[] = [
+                'loc'        => seo_abs('/c/' . (string) $c['channel']),
+                'lastmod'    => $lm !== '' ? gmdate('Y-m-d', strtotime($lm) ?: time()) : $today,
+                'changefreq' => 'daily',
+                'priority'   => $i < 5 ? '0.7' : '0.6',
+            ];
+        }
+    }
+
     return $out;
 }
 

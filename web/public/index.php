@@ -49,9 +49,17 @@ if ($seg0 === 's' && isset($segments[1]) && $segments[1] !== '') {
 // /movie、/duanju 等分类落地页
 $landingSlug = seo_landing($seg0) !== null ? $seg0 : '';
 
+// /c/{channel} 频道页（频道名只留字母数字下划线，避免奇怪 URL）
+$channelSlug = '';
+if ($seg0 === 'c' && isset($segments[1]) && $segments[1] !== '') {
+    $channelSlug = repo_channel_slug((string) $segments[1]);
+}
+
 if ($pathId !== '') {
     $route = 'detail';
     $_GET['id'] = $pathId;
+} elseif ($channelSlug !== '') {
+    $route = 'channel';
 } elseif ($landingSlug !== '') {
     $route = 'landing';
 } else {
@@ -61,7 +69,7 @@ if ($pathId !== '') {
 
 // 未知路径一律 404。否则 /任意字符串 都会返回 200 + 首页内容，
 // 等于给搜索引擎敞开无限 URL（软 404 是最典型的收录陷阱）
-$knownRoutes = ['home', 'search', 'detail', 'submit', 'updates', 'api_search', 'landing', 'notfound'];
+$knownRoutes = ['home', 'search', 'detail', 'submit', 'updates', 'api_search', 'landing', 'channel', 'channels', 'notfound'];
 if (!in_array($route, $knownRoutes, true)) {
     http_response_code(404);
     $route = 'notfound';
@@ -88,6 +96,67 @@ switch ($route) {
             . '<a class="btn-soft inline-flex" href="/search">浏览全部资源</a></div></div>';
         $title = '404 页面不存在 - ' . $siteName;
         $description = '页面不存在。';
+        break;
+
+    case 'channels':
+        $channels = repo_channels(200);
+        $content = render_view('channels', [
+            'channels'       => $channels,
+            'totalResources' => repo_stats()['total'],
+        ]);
+        $title = '来源频道列表 - ' . count($channels) . ' 个公开频道 - ' . $siteName;
+        $description = '本站内容来自 ' . count($channels) . ' 个公开 Telegram 频道，合计收录 '
+            . number_format(array_sum(array_map(fn($c) => (int) $c['resources'], $channels)))
+            . ' 条网盘分享。每个频道可查看收录量、平台构成与更新节奏。';
+        break;
+
+    case 'channel':
+        $ch = repo_channel($channelSlug);
+        if ($ch === null) {
+            http_response_code(404);
+            $route = 'notfound';
+            $content = '';
+            $title = '404 - ' . $siteName;
+            $description = '频道不存在。';
+            break;
+        }
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $channelTypes = repo_channel_types($channelSlug);
+        $channelProviders = repo_channel_providers($channelSlug);
+        $res = repo_channel_search($channelSlug, $page, cfg_get_int('search_page_size') ?: 20);
+
+        $headHtml = render_view('channel_head', [
+            'ch'               => $ch,
+            'channelTypes'     => $channelTypes,
+            'channelProviders' => $channelProviders,
+            'total'            => $res['total'],
+        ]);
+        $listHtml = render_view('list', [
+            'q'        => '',
+            'type'     => '',
+            'provider' => '',
+            'res'      => $res,
+            'facets'   => repo_facets(),
+            'stats'    => repo_stats(),
+            'isHome'   => false,
+            'hotWords' => [],
+            'landing'  => null,
+            'basePath' => '/c/' . $channelSlug,
+            'rootPath' => false,
+            'bareList' => true,
+            'bareLabel' => '@' . $channelSlug . ' 的资源',
+        ]);
+        $footHtml = render_view('channel_foot', [
+            'allChannels' => repo_channels(200),
+            'current'     => $channelSlug,
+        ]);
+        $content = $headHtml . $listHtml . $footHtml;
+
+        $title = '@' . $channelSlug . ' 频道资源 - ' . number_format((int) $res['total']) . ' 条网盘分享 - ' . $siteName;
+        $description = '@' . $channelSlug . ' 频道收录的 ' . number_format((int) $res['total']) . ' 条网盘分享，覆盖 '
+            . (int) $ch['platforms'] . ' 个平台，内容以'
+            . ui_type_name((string) (repo_channel_lead_type($channelTypes, (int) $res['total'])['type'] ?? 'other')) . '为主，最近更新 '
+            . ui_rel_time((string) $ch['latest']) . '。';
         break;
 
     case 'landing':
@@ -162,10 +231,13 @@ switch ($route) {
         $isFav = $currentUser !== null && user_is_favorite((int) $currentUser['id'], (string) $row['id']);
         $versions = repo_versions((string) $row['core_title'], 12);
         $related = repo_search(['q' => mb_substr((string) $row['core_title'], 0, 12)], 1, 7)['items'];
+        // 同频道的其他资源：详情页独有的内容块，也是给频道路径导流
+        $channelMore = repo_channel_more((string) $row['channel'], (string) $row['id'], 6);
         $content = render_view('detail', [
             'row'         => $row,
             'versions'    => $versions,
             'related'     => $related,
+            'channelMore' => $channelMore,
             'isFav'       => $isFav,
             'currentUser' => $currentUser,
         ]);
@@ -334,6 +406,7 @@ switch ($route) {
 $seoMeta = seo_meta_for([
     'route'    => $route,
     'slug'     => $landingSlug,
+    'channel'  => $channelSlug,
     'id'       => (string) ($row['id'] ?? ($_GET['id'] ?? '')),
     'q'        => (string) ($q ?? ''),
     'type'     => (string) ($type ?? ''),
@@ -366,6 +439,22 @@ if ($route === 'detail' && isset($row) && is_array($row)) {
         'dateModified'  => (string) ($row['updated_at'] ?? $row['posted_at'] ?? gmdate('c')),
         'isPartOf'      => ['@type' => 'WebSite', 'name' => $siteName, 'url' => seo_abs('/')],
     ];
+} elseif ($route === 'channel' && isset($ch) && is_array($ch)) {
+    $jsonld[] = seo_jsonld_collection('@' . $channelSlug . ' 频道资源', (string) $description,
+        seo_abs('/c/' . $channelSlug), (int) $res['total']);
+    $jsonld[] = seo_jsonld_itemlist((array) ($res['items'] ?? []), '@' . $channelSlug . ' 频道资源');
+    $jsonld[] = seo_jsonld_breadcrumb([
+        ['name' => '首页', 'url' => seo_abs('/')],
+        ['name' => '来源频道', 'url' => seo_abs('/channels')],
+        ['name' => '@' . $channelSlug, 'url' => seo_abs('/c/' . $channelSlug)],
+    ]);
+} elseif ($route === 'channels' && isset($channels) && is_array($channels)) {
+    $jsonld[] = seo_jsonld_collection('来源频道列表', (string) $description, seo_abs('/channels'),
+        array_sum(array_map(fn($c) => (int) $c['resources'], $channels)));
+    $jsonld[] = seo_jsonld_breadcrumb([
+        ['name' => '首页', 'url' => seo_abs('/')],
+        ['name' => '来源频道', 'url' => seo_abs('/channels')],
+    ]);
 } elseif ($route === 'landing' && isset($spec) && is_array($spec)) {
     $jsonld[] = seo_jsonld_collection((string) $spec['h1'], (string) $spec['desc'],
         seo_abs('/' . $landingSlug), (int) $res['total']);

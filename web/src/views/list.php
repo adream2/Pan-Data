@@ -20,7 +20,9 @@ $basePath = $basePath ?? '/search';
 $pagerQuery = $landing !== null ? [] : $baseQuery;
 ?>
 
-<?php if ($landing !== null): ?>
+<?php if (!empty($bareList)): ?>
+<?php /* 频道页自己渲染头部（含专属说明），这里不再输出 H1 */ ?>
+<?php elseif ($landing !== null): ?>
 <section class="mx-auto mb-3 w-full max-w-3xl px-2 sm:px-0">
   <h1 class="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"><?= e((string) $landing['h1']) ?></h1>
   <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
@@ -29,7 +31,7 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
     <span><?= e(mb_substr((string) $landing['desc'], 0, 60)) ?></span>
   </p>
 </section>
-<?php elseif (!($rootPath ?? false)): ?>
+<?php elseif (!($rootPath ?? false) && empty($bareList)): ?>
 <?php /* 首页的 h1 由页头站点名承担；搜索页 / 全部资源页在这里给唯一的 h1 */ ?>
 <section class="mx-auto mb-3 w-full max-w-3xl px-2 sm:px-0">
   <h1 class="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl">
@@ -45,7 +47,7 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
 </section>
 <?php endif; ?>
 
-<section class="mx-auto mb-4 w-full max-w-3xl px-2 sm:mb-8 sm:px-0" aria-label="搜索">
+<?php if (empty($bareList)): ?><section class="mx-auto mb-4 w-full max-w-3xl px-2 sm:mb-8 sm:px-0" aria-label="搜索">
 
   <form action="/search" method="get" class="flex items-center gap-2" role="search">
     <div class="relative flex-1">
@@ -132,6 +134,7 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
   </div>
   <?php endif; ?>
 </section>
+<?php endif; ?>
 
 <section class="panel" aria-label="资源列表">
   <?php if ($res['items'] === []): ?>
@@ -244,7 +247,11 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
 
 <div class="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-gray-500">
   <span>
-    <?= $q !== '' ? '「' . e($q) . '」' : ($landing !== null ? e((string) $landing['h1']) : '最新收录') ?>
+    <?= $q !== ''
+        ? '「' . e($q) . '」'
+        : ($landing !== null
+            ? e((string) $landing['h1'])
+            : e((string) ($bareLabel ?? '最新收录'))) ?>
     · 共 <span class="tabular-nums font-medium text-gray-700"><?= number_format((int) $res['total']) ?></span> 条
     <?= $res['pages'] > 1 ? '· 第 ' . (int) $res['page'] . ' / ' . (int) $res['pages'] . ' 页' : '' ?>
   </span>

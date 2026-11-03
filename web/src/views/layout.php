@@ -126,6 +126,7 @@ $siteTitleTag = ($siteHeading ?? false) ? 'h1' : 'div';
         <a class="transition hover:text-slate-200" href="/<?= e($slug) ?>"><?= e((string) $spec['h1']) ?></a>
       <?php endforeach; ?>
       <a class="transition hover:text-slate-200" href="/updates">追更日历</a>
+      <a class="transition hover:text-slate-200" href="/channels">来源频道</a>
       <a class="transition hover:text-slate-200" href="/search">全部资源</a>
     </p>
     <p class="mb-2 text-slate-400/90">本站内容由公开频道自动采集整理，仅提供链接检索，不存储、不复制、不传播任何文件。如有侵权请联系删除。</p>

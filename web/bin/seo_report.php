@@ -133,13 +133,33 @@ if ($chunks > 1) {
     line('ok', sprintf('最后一片 sitemap-res-%d.xml：%d 条', $chunks, count($last)));
 }
 
-echo "\n== 内链 ==\n";
-$linked = 0;
-foreach (seo_landings() as $slug => $spec) {
-    $linked++;
+echo "
+== 频道页（站内最大的内链资产）==
+";
+$channels = repo_channels(200);
+$chSum = array_sum(array_map(fn($c) => (int) $c['resources'], $channels));
+$active = 0;
+$stale = 0;
+foreach ($channels as $c) {
+    $ts = strtotime((string) $c['latest']) ?: 0;
+    if ($ts > time() - 7 * 86400) {
+        $active++;
+    } else {
+        $stale++;
+    }
 }
-line('ok', "页脚固定输出 {$linked} 个分类入口 + 追更 + 全部资源");
-line('ok', '详情页有面包屑（首页 → 分类 → 标题）');
+line('ok', count($channels) . " 个频道页，覆盖 {$chSum} 条资源");
+line(
+    $stale > count($channels) * 0.3 ? 'warn' : 'ok',
+    "近 7 天有更新的频道 {$active} 个（停更 {$stale} 个）",
+    $stale > 0 ? '停更频道的内容不再变化，长期会被判低质；频道页已标注「最近更新」让人自行判断' : ''
+);
+
+echo "
+== 内链 ==
+";
+line('ok', '页脚固定输出 ' . count(seo_landings()) . ' 个分类入口 + 频道 + 追更 + 全部资源');
+line('ok', '详情页有面包屑（首页 → 分类 → 标题）与「同频道其他资源」');
 
 echo "\n== 汇总 ==\n";
 printf("  通过 %d｜提示 %d｜问题 %d\n\n", $ok, $warn, $bad);
