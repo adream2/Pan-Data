@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/settings.php';
+
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/schema.php';
 
@@ -109,9 +111,9 @@ function repo_import_payload(array $payload, string $origin): array
 
 function repo_url(string $file): string
 {
-    $owner = (string) cfg('repo.github');
-    $branch = (string) cfg('repo.branch', 'data');
-    $dir = trim((string) cfg('repo.dir', 'data'), '/');
+    $owner = (string) repo_conf('github');
+    $branch = (string) repo_conf('branch', 'data');
+    $dir = trim((string) repo_conf('dir', 'data'), '/');
     return 'https://api.github.com/repos/' . $owner . '/contents/' . $dir . '/' . ltrim($file, '/')
         . '?ref=' . rawurlencode($branch);
 }
@@ -135,18 +137,18 @@ function repo_fetch_once(string $file): ?string
 {
     $ch = curl_init(repo_url($file));
     $headers = ['accept: application/vnd.github.raw', 'user-agent: pansou-php'];
-    if ((string) cfg('repo.token', '') !== '') {
-        $headers[] = 'authorization: Bearer ' . (string) cfg('repo.token');
+    if ((string) repo_conf('token', '') !== '') {
+        $headers[] = 'authorization: Bearer ' . (string) repo_conf('token');
     }
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT        => (int) cfg('repo.timeout', 30),
+        CURLOPT_TIMEOUT        => max(10, (int) repo_conf('timeout', 120)),
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_ENCODING       => '',
         CURLOPT_HTTPHEADER     => $headers,
     ]);
-    $proxy = (string) cfg('repo.proxy', '');
+    $proxy = (string) repo_conf('proxy', '');
     if ($proxy !== '') {
         curl_setopt($ch, CURLOPT_PROXY, $proxy);
     }
@@ -232,6 +234,9 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
     }
     if (!empty($f['only_valid'])) {
         $where[] = "r.status = 'valid'";
+    }
+    if (!empty($f['hide_invalid'])) {
+        $where[] = "r.status != 'invalid'";
     }
 
     $whereSql = implode(' AND ', $where);

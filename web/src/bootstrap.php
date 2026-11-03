@@ -42,8 +42,10 @@ function db(): PDO
     return $pdo;
 }
 
-function e(?string $s): string
+function e(mixed $s): string
 {
+    // 放宽到 mixed：模板里常直接塞 int / null（如 id、(int) 计数），
+    // 严格 string 会让整页 500，得不偿失
     return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 

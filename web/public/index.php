@@ -5,7 +5,9 @@ require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/moderation.php';
 require_once __DIR__ . '/../src/user.php';
+require_once __DIR__ . '/../src/settings.php';
 require_once __DIR__ . '/../src/ui.php';
+require_once __DIR__ . '/../src/promo.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -67,9 +69,14 @@ switch ($route) {
         $error = '';
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             csrf_check();
-            if (setting('submit_open', '1') !== '1') {
+            $needLogin = cfg_get_bool('submit_require_login');
+            $maxPerHour = cfg_get_int('submit_max_per_hour');
+            if (cfg_get('submit_open') !== '1') {
                 $error = '投稿暂时关闭';
-            } elseif (!rate_limit('submit', (int) cfg('security.submit_per_hour', 6), 3600)) {
+            } elseif ($needLogin && $currentUser === null) {
+                $error = '投稿需要先登录';
+                redirect('/user.php?r=login');
+            } elseif ($maxPerHour > 0 && !rate_limit('submit', $maxPerHour, 3600)) {
                 $error = '投稿太频繁，休息一下再来';
             } else {
                 $t = trim((string) ($_POST['title'] ?? ''));
@@ -85,23 +92,49 @@ switch ($route) {
                     $error = '只支持主流网盘分享链接（夸克 / 百度 / 阿里 / 迅雷 / UC / 123 等）';
                 } else {
                     $mod = mod_check($t, $note);
-                    $dup = db()->prepare('SELECT id FROM resources WHERE share_url = ?');
-                    $dup->execute([$shareUrl]);
-                    if ($dup->fetchColumn() !== false) {
+                    $dup = cfg_get_bool('submit_dup_skip')
+                        ? db()->prepare('SELECT id FROM resources WHERE share_url = ?') : null;
+                    $isDup = $dup !== null && $dup->execute([$shareUrl]) && $dup->fetchColumn() !== false;
+                    if ($isDup) {
                         $error = '这条链接已经在库里了';
                     } elseif ($mod['level'] === 'blocked') {
                         $error = '内容不符合收录要求：' . implode('；', $mod['reasons']);
                     } else {
-                        db()->prepare('INSERT INTO submissions(title, share_url, pwd, note, contact, ip, status, created_at)
-                            VALUES(?,?,?,?,?,?,?,?)')
-                            ->execute([$t, $shareUrl, $pwd, $note, $contact,
-                                (string) ($_SERVER['REMOTE_ADDR'] ?? ''), 'pending', now_iso()]);
+                        $mode = cfg_get('review_mode');
+                        $allowed = array_filter(array_map('trim', explode(',', cfg_get('review_low_auto_targets'))));
+                        $lowOk = $mode === 'low_auto' && $mod['level'] === 'low'
+                            && ($allowed === [] || in_array(mod_type_guess($t), $allowed, true));
+                        if ($mode === 'none' || $lowOk) {
+                            $rid = 's' . substr(sha1($shareUrl), 0, 15);
+                            repo_upsert([
+                                'id' => $rid, 'title' => $t, 'core_title' => $t,
+                                'type' => mod_type_guess($t), 'provider' => $provider,
+                                'share_url' => $shareUrl, 'pwd' => $pwd,
+                                'status' => 'unchecked', 'channel' => 'submission',
+                                'desc' => $note, 'posted_at' => now_iso(),
+                            ], 'submit');
+                            db()->prepare('INSERT INTO submissions(title, share_url, pwd, note, contact, ip, status, created_at, reviewed_at, resource_id)
+                                VALUES(?,?,?,?,?,?,?,?,?,?)')
+                                ->execute([$t, $shareUrl, $pwd, $note, $contact,
+                                    (string) ($_SERVER['REMOTE_ADDR'] ?? ''), 'approved', now_iso(), now_iso(), $rid]);
+                        } else {
+                            db()->prepare('INSERT INTO submissions(title, share_url, pwd, note, contact, ip, status, created_at)
+                                VALUES(?,?,?,?,?,?,?,?)')
+                                ->execute([$t, $shareUrl, $pwd, $note, $contact,
+                                    (string) ($_SERVER['REMOTE_ADDR'] ?? ''), 'pending', now_iso()]);
+                        }
                         $done = true;
                     }
                 }
             }
         }
-        $content = render_view('submit', ['done' => $done, 'error' => $error]);
+        $content = render_view('submit', [
+            'done' => $done,
+            'error' => $error,
+            'closed' => cfg_get('submit_open') !== '1',
+            'needLogin' => cfg_get_bool('submit_require_login') && $currentUser === null,
+            'reviewMode' => cfg_get('review_mode'),
+        ]);
         $title = '投稿 - ' . $siteName;
         break;
 
@@ -110,7 +143,7 @@ switch ($route) {
             'q'        => (string) ($_GET['q'] ?? ''),
             'type'     => (string) ($_GET['type'] ?? ''),
             'provider' => (string) ($_GET['provider'] ?? ''),
-        ], max(1, (int) ($_GET['page'] ?? 1)), (int) cfg('page_size', 20)));
+        ], max(1, (int) ($_GET['page'] ?? 1)), cfg_get_int('search_page_size') ?: 20));
         // no break
 
     case 'search':
@@ -120,11 +153,14 @@ switch ($route) {
         $provider = (string) ($_GET['provider'] ?? '');
         $page     = max(1, (int) ($_GET['page'] ?? 1));
 
-        $res = repo_search(
-            ['q' => $q, 'type' => $type, 'provider' => $provider],
-            $page,
-            (int) cfg('page_size', 20)
-        );
+        $filters = ['q' => $q, 'type' => $type, 'provider' => $provider];
+        if (cfg_get('show_invalid') !== '1') {
+            $filters['hide_invalid'] = true;
+        }
+        if (cfg_get('show_unchecked') !== '1') {
+            $filters['only_valid'] = true;
+        }
+        $res = repo_search($filters, $page, cfg_get_int('search_page_size') ?: 20);
         $facets = repo_facets();
         $stats = repo_stats();
         if ($q !== '') {
@@ -140,7 +176,7 @@ switch ($route) {
             'facets'   => $facets,
             'stats'    => $stats,
             'isHome'   => $isHome,
-            'hotWords' => $isHome ? top_searches(7, 10) : [],
+            'hotWords' => $isHome ? top_searches(cfg_get_int('search_hot_words') ?: 7, 10) : [],
         ]);
         $title = $q !== ''
             ? $q . ' - ' . $siteName

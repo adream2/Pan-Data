@@ -91,3 +91,24 @@ function mod_clean_pwd(?string $pwd): ?string
     }
     return $pwd;
 }
+
+/** 按标题关键词粗估资源类型（免审入库时用；粗分无妨，后续以官方标题为准） */
+function mod_type_guess(string $title): string
+{
+    if (preg_match('/(课程|教程|培训|训练营|实战|从入门|bootcamp|lesson|course)/iu', $title)) {
+        return 'course';
+    }
+    if (preg_match('/(电子书|pdf|epub|mobi|小说|漫画)/iu', $title)) {
+        return 'ebook';
+    }
+    if (preg_match('/(软件|app|破解版|绿色版)/iu', $title)) {
+        return 'software';
+    }
+    if (preg_match('/(mp3|flac|无损|专辑|音乐|歌曲)/iu', $title)) {
+        return 'music';
+    }
+    if (preg_match('/(电影|电视剧|剧集|动漫|综艺|纪录片|全集|全\\d+集|第\\d+季|\\d{4}年|movie|drama)/iu', $title)) {
+        return 'movie';
+    }
+    return 'other';
+}

@@ -8,6 +8,8 @@ require_once __DIR__ . '/../src/moderation.php';
 require_once __DIR__ . '/../src/user.php';
 require_once __DIR__ . '/../src/admin_extra.php';
 require_once __DIR__ . '/../src/ui.php';
+require_once __DIR__ . '/../src/settings.php';
+require_once __DIR__ . '/../src/promo.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -83,8 +85,8 @@ if ($action !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
         case 'trigger':
             $wf = (string) ($_POST['workflow'] ?? '');
-            $token = (string) cfg('github.token', '');
-            $repo = (string) cfg('github.repo', '');
+            $token = (string) repo_conf('github_token', '');
+            $repo = (string) repo_conf('github_repo', '');
             $file = (array) cfg('github.workflows', [])[$wf] ?? null;
             if ($token === '' || $repo === '' || $file === null) {
                 flash('未配置 GitHub token / 仓库', 'err');
@@ -145,13 +147,89 @@ if ($action !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('/admin.php?r=res&q=' . urlencode((string) ($_POST['q'] ?? '')));
 
         case 'settings':
-            foreach (['site_name', 'site_desc', 'notice', 'submit_open'] as $k) {
-                if (isset($_POST[$k])) {
-                    set_setting($k, trim((string) $_POST[$k]));
+            $saved = cfg_save($_POST);
+            flash($saved ? '已保存 ' . count($saved) . ' 项设置，即时生效' : '没有有效改动', $saved ? 'ok' : 'err');
+            redirect('/admin.php?r=settings');
+
+        case 'promo_create':
+            if (cfg_get('promo_open') !== '1') {
+                flash('拉新总开关未开启，先去设置里打开', 'err');
+            } else {
+                $rid = (string) ($_POST['resource_id'] ?? '');
+                $row = $rid !== '' ? promo_resource($rid) : null;
+                if ($row === null) {
+                    flash('资源不存在', 'err');
+                } else {
+                    $id = promo_task_create($row, (string) ($row['status'] ?? ''));
+                    if ($id > 0 && cfg_get_bool('promo_auto_approve')) {
+                        flash(promo_run_one($id), 'ok');
+                    } else {
+                        flash($id > 0 ? '拉新任务已创建 #' . $id . '，去「拉新任务」执行' : '创建失败');
+                    }
                 }
             }
-            flash('设置已保存');
-            redirect('/admin.php?r=settings');
+            redirect('/admin.php?r=promo');
+
+        case 'promo_retry':
+            promo_task_retry((int) ($_POST['id'] ?? 0));
+            flash('已重置为待执行');
+            redirect('/admin.php?r=promo');
+
+        case 'promo_cancel':
+            promo_task_cancel((int) ($_POST['id'] ?? 0));
+            flash('任务已取消');
+            redirect('/admin.php?r=promo');
+
+        case 'promo_run':
+            $msg = promo_run_one((int) ($_POST['id'] ?? 0));
+            flash($msg, str_starts_with($msg, '转存成功') ? 'ok' : 'err');
+            redirect('/admin.php?r=promo');
+
+        case 'promo_run_all':
+            [$ok, $fail, $note] = promo_run_pending();
+            flash("批量执行：成功 {$ok}，失败 {$fail}（{$note}）", $fail > 0 ? 'err' : 'ok');
+            redirect('/admin.php?r=promo');
+
+        case 'promo_account':
+            $err = promo_account_save($_POST);
+            flash($err === '' ? '账号已保存' : $err, $err === '' ? 'ok' : 'err');
+            redirect('/admin.php?r=promo_accounts');
+
+        case 'promo_account_toggle':
+            promo_account_toggle((int) ($_POST['id'] ?? 0));
+            flash('账号状态已切换');
+            redirect('/admin.php?r=promo_accounts');
+
+        case 'review_bulk':
+            $ids = array_filter(array_map('intval', (array) ($_POST['ids'] ?? [])));
+            $decision = (string) ($_POST['decision'] ?? '');
+            $n = 0;
+            if ($ids !== [] && in_array($decision, ['approve', 'reject'], true)) {
+                $place = implode(',', array_fill(0, count($ids), '?'));
+                $stmtB = db()->prepare('SELECT * FROM submissions WHERE id IN (' . $place . ") AND status = 'pending'");
+                $stmtB->execute(array_values($ids));
+                foreach ($stmtB->fetchAll() as $sub) {
+                    if ($decision === 'approve') {
+                        $provider = mod_provider_of((string) $sub['share_url']) ?? 'unknown';
+                        $rid = 's' . substr(sha1((string) $sub['share_url']), 0, 15);
+                        repo_upsert([
+                            'id' => $rid, 'title' => (string) $sub['title'], 'core_title' => (string) $sub['title'],
+                            'type' => mod_type_guess((string) $sub['title']), 'provider' => $provider,
+                            'share_url' => (string) $sub['share_url'], 'pwd' => $sub['pwd'],
+                            'status' => 'unchecked', 'channel' => 'submission',
+                            'desc' => (string) ($sub['note'] ?? ''), 'posted_at' => now_iso(),
+                        ], 'submit');
+                        db()->prepare("UPDATE submissions SET status = 'approved', reviewed_at = ?, resource_id = ? WHERE id = ?")
+                            ->execute([now_iso(), $rid, $sub['id']]);
+                    } else {
+                        db()->prepare("UPDATE submissions SET status = 'rejected', reviewed_at = ? WHERE id = ?")
+                            ->execute([now_iso(), $sub['id']]);
+                    }
+                    $n++;
+                }
+            }
+            flash($n > 0 ? "已批量处理 {$n} 条" : '没有选中待审投稿');
+            redirect('/admin.php?r=subs');
 
         case 'password':
             $new = (string) ($_POST['new_password'] ?? '');
@@ -209,9 +287,10 @@ $navItems = [
     'res'       => '资源管理',
     'sync'      => '同步与采集',
     'users'     => '用户管理',
-    'accounts'  => '网盘账号',
     'reports'   => '举报处理',
     'bulk'      => '批量录入',
+    'promo'     => '拉新任务',
+    'promo_accounts' => '网盘账号',
     'settings'  => '设置',
 ];
 $pending = (int) db()->query("SELECT COUNT(*) FROM submissions WHERE status='pending'")->fetchColumn();
@@ -263,7 +342,11 @@ switch ($route) {
                   . '<button class="rounded-md bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">拒绝</button></form>'
                 : '<span class="text-xs text-neutral-400">' . e((string) ($s['reject_reason'] ?? '')) . '</span>';
 
+            $box = $s['status'] === 'pending'
+                ? '<input type="checkbox" name="ids[]" value="' . (int) $s['id'] . '" class="size-3.5 accent-blue-600">'
+                : '';
             $tr .= '<tr class="border-b border-neutral-100 last:border-0">'
+                . '<td class="px-3 py-3 align-top">' . $box . '</td>'
                 . '<td class="px-4 py-3 align-top"><div class="text-[13px] font-medium text-neutral-900">' . e((string) $s['title']) . '</div>'
                 . '<div class="mt-1 break-all font-mono text-[11px] text-neutral-400">' . e((string) $s['share_url']) . '</div>'
                 . '<div class="mt-1 text-[11px] text-neutral-400">' . e((string) ($s['note'] ?? '')) . ' ' . e((string) ($s['contact'] ?? '')) . '</div></td>'
@@ -271,16 +354,36 @@ switch ($route) {
                 . '<td class="px-4 py-3 align-top font-mono text-[11px] text-neutral-400">' . e(substr((string) $s['created_at'], 0, 16)) . '</td>'
                 . '<td class="px-4 py-3 align-top">' . $ops . '</td></tr>';
         }
+        $modeHint = match (cfg_get('review_mode')) {
+            'none' => '当前为「免审」：新投稿直接入库，本列表只留历史。',
+            'low_auto' => '当前为「低风险自动通过」：只有命中敏感词的才会进这里。',
+            default => '当前为「全部人工审核」：每条投稿都需要在这里处理。',
+        };
+        $bulkBar = $status === 'pending'
+            ? '<div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white p-3 shadow-sm">'
+              . '<span class="text-xs text-neutral-500">勾选后批量处理：</span>'
+              . '<button class="rounded-md bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"'
+              . ' type="submit" name="decision" value="approve">通过所选</button>'
+              . '<button class="rounded-md bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"'
+              . ' type="submit" name="decision" value="reject">拒绝所选</button>'
+              . '<span class="ml-auto text-[11px] text-neutral-400">' . e($modeHint) . '</span></div>'
+            : '<p class="mt-3 text-[11px] text-neutral-400">' . e($modeHint) . '</p>';
+
         $body = '<div class="mb-4 flex gap-2">' . $tabs . '</div>'
+            . '<form method="post"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+            . '<input type="hidden" name="action" value="review_bulk">'
             . '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
             . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">'
-            . '<tr><th class="px-4 py-2.5 font-medium">内容</th><th class="px-4 py-2.5 font-medium">风控</th>'
+            . '<tr><th class="w-10 px-3 py-2.5"></th><th class="px-4 py-2.5 font-medium">内容</th>'
+            . '<th class="px-4 py-2.5 font-medium">风控</th>'
             . '<th class="px-4 py-2.5 font-medium">时间</th><th class="px-4 py-2.5 font-medium">操作</th></tr></thead><tbody>'
-            . ($tr ?: '<tr><td colspan="4" class="px-4 py-10 text-center text-sm text-neutral-400">暂无投稿</td></tr>')
-            . '</tbody></table></div>';
+            . ($tr ?: '<tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-400">暂无投稿</td></tr>')
+            . '</tbody></table></div></form>'
+            . $bulkBar;
         break;
 
     case 'res':
+        $promoOn = cfg_get('promo_open') === '1';
         $q = trim((string) ($_GET['q'] ?? ''));
         $page = max(1, (int) ($_GET['page'] ?? 1));
         $res = repo_search(['q' => $q], $page, 20);
@@ -295,7 +398,13 @@ switch ($route) {
                 . '<div class="mt-0.5 text-[11px] text-neutral-400">' . e(ui_type_name((string) $r['type'])) . '</div></td>'
                 . '<td class="px-4 py-3 text-xs">' . ui_status((string) $r['status']) . '</td>'
                 . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e(substr((string) ($r['posted_at'] ?? ''), 0, 10)) . '</td>'
-                . '<td class="px-4 py-3"><form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                . '<td class="px-4 py-3 whitespace-nowrap">'
+                . ($promoOn && $r['provider'] === 'quark'
+                    ? '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                      . '<input type="hidden" name="action" value="promo_create"><input type="hidden" name="resource_id" value="' . e((string) $r['id']) . '">'
+                      . '<button class="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100">拉新</button></form> '
+                    : '')
+                . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
                 . '<input type="hidden" name="action" value="toggle"><input type="hidden" name="field" value="hidden">'
                 . '<input type="hidden" name="id" value="' . e((string) $r['id']) . '"><input type="hidden" name="q" value="' . e($q) . '">'
                 . '<button class="rounded-md bg-white px-2.5 py-1 text-xs text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">下架</button></form></td></tr>';
@@ -343,7 +452,7 @@ switch ($route) {
                 . '<td class="px-3 py-2 text-[11px] text-neutral-400">' . e((string) $l['message']) . '</td>'
                 . '<td class="px-3 py-2 font-mono text-[11px] text-neutral-400">' . e(substr((string) $l['created_at'], 0, 16)) . '</td></tr>';
         }
-        $ghConfigured = (string) cfg('github.token', '') !== '';
+        $ghConfigured = (string) repo_conf('github_token', '') !== '';
 
         $body = '<div class="grid gap-5 lg:grid-cols-2">'
             . '<section class="rounded-lg bg-white p-5 shadow-sm">'
@@ -381,33 +490,169 @@ switch ($route) {
             . ($logRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无</td></tr>') . '</table></section>';
         break;
 
+    case 'promo':
+        $counts = promo_task_counts();
+        $quotaLeft = promo_quota_left();
+        $quotaLimit = cfg_get_int('promo_daily_limit');
+        $open = cfg_get('promo_open') === '1';
+        $accs = promo_accounts(true);
+        $qkAccs = array_values(array_filter($accs, fn($a) => $a['provider'] === 'quark'));
+
+        $notice = '<div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">'
+            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . ($open ? '开' : '关') . '</div>'
+            . '<div class="mt-0.5 text-xs text-neutral-400">拉新总开关</div></div>'
+            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . (int) ($counts['pending'] ?? 0) . '</div>'
+            . '<div class="mt-0.5 text-xs text-neutral-400">待执行</div></div>'
+            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . (int) ($counts['done'] ?? 0) . '</div>'
+            . '<div class="mt-0.5 text-xs text-neutral-400">已完成</div></div>'
+            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . (int) ($counts['failed'] ?? 0) . '</div>'
+            . '<div class="mt-0.5 text-xs text-neutral-400">失败</div></div>'
+            . '</div>';
+
+        $warn = '';
+        if (!$open) {
+            $warn = '<div class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">'
+                . '拉新总开关是关的，任务可以创建但不会执行。去 <a class="underline" href="/admin.php?r=settings">设置 → 拉新</a> 打开。</div>';
+        } elseif ($qkAccs === []) {
+            $warn = '<div class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">'
+                . '还没有启用的夸克账号，转存会失败。去 <a class="underline" href="/admin.php?r=promo_accounts">网盘账号</a> 添加 Cookie。</div>';
+        }
+
+        $statMap = [
+            'pending'    => ['待执行', 'bg-neutral-100 text-neutral-600'],
+            'executing'  => ['执行中', 'bg-blue-50 text-blue-700'],
+            'done'       => ['已完成', 'bg-emerald-50 text-emerald-700'],
+            'failed'     => ['失败', 'bg-rose-50 text-rose-700'],
+            'canceled'   => ['已取消', 'bg-neutral-100 text-neutral-500'],
+        ];
+        $rows = '';
+        foreach (promo_task_list('', 100) as $t) {
+            [$label, $cls] = $statMap[$t['status']] ?? [$t['status'], 'bg-neutral-100 text-neutral-600'];
+            $ops = '';
+            if (in_array($t['status'], ['pending', 'failed'], true)) {
+                $ops = '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                    . '<input type="hidden" name="action" value="promo_run"><input type="hidden" name="id" value="' . (int) $t['id'] . '">'
+                    . '<button class="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100">执行</button></form>';
+            }
+            if ($t['status'] !== 'executing' && $t['status'] !== 'done') {
+                $ops .= ' <form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                    . '<input type="hidden" name="action" value="promo_cancel"><input type="hidden" name="id" value="' . (int) $t['id'] . '">'
+                    . '<button class="rounded-md bg-white px-2 py-0.5 text-[11px] text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50">取消</button></form>';
+            }
+            if ($t['status'] === 'failed') {
+                $ops .= ' <form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                    . '<input type="hidden" name="action" value="promo_retry"><input type="hidden" name="id" value="' . (int) $t['id'] . '">'
+                    . '<button class="rounded-md bg-white px-2 py-0.5 text-[11px] text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50">重排</button></form>';
+            }
+            $target = $t['target_url'] !== ''
+                ? '<a class="break-all text-blue-600 hover:underline" href="' . e((string) $t['target_url']) . '" target="_blank" rel="noopener">' . e((string) $t['target_url']) . '</a>'
+                    . ($t['target_pwd'] !== '' ? ' <span class="tag-pwd">' . e((string) $t['target_pwd']) . '</span>' : '')
+                : '<span class="text-neutral-300">—</span>';
+            $err = $t['error'] !== '' ? '<div class="mt-1 text-[11px] text-rose-600">' . e((string) $t['error']) . '</div>' : '';
+            $rows .= '<tr class="border-b border-neutral-100 last:border-0">'
+                . '<td class="px-4 py-3"><div class="text-[13px] font-medium text-neutral-900">' . e(mb_substr((string) $t['title'], 0, 40)) . '</div>'
+                . '<div class="mt-0.5 break-all font-mono text-[11px] text-neutral-400">' . e((string) $t['source_url']) . '</div>' . $err . '</td>'
+                . '<td class="px-4 py-3 whitespace-nowrap"><span class="rounded-full px-2 py-0.5 text-[11px] ' . $cls . '">' . $label . '</span></td>'
+                . '<td class="px-4 py-3">' . $target . '</td>'
+                . '<td class="px-4 py-3 whitespace-nowrap font-mono text-[11px] text-neutral-400">' . e(substr((string) $t['created_at'], 0, 16)) . '</td>'
+                . '<td class="px-4 py-3 whitespace-nowrap">' . $ops . '</td></tr>';
+        }
+
+        $body = $notice . $warn
+            . '<div class="mb-4 flex flex-wrap items-center gap-2">'
+            . '<form method="post"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+            . '<input type="hidden" name="action" value="promo_run_all">'
+            . '<button class="btn" type="submit"' . ($open ? '' : ' disabled') . '>批量执行待处理（最多 5 条）</button></form>'
+            . '<span class="text-xs text-neutral-400">今日配额 ' . ($quotaLimit > 0 ? max(0, $quotaLeft) . ' / ' . $quotaLimit : '不限')
+            . ' · 间隔 ' . cfg_get_int('promo_min_interval') . ' 秒 · 启用账号 ' . count($accs) . ' 个</span>'
+            . '</div>'
+            . '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
+            . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">'
+            . '<tr><th class="px-4 py-2.5 font-medium">资源</th><th class="px-4 py-2.5 font-medium">状态</th>'
+            . '<th class="px-4 py-2.5 font-medium">新分享链接</th><th class="px-4 py-2.5 font-medium">创建</th>'
+            . '<th class="px-4 py-2.5 font-medium">操作</th></tr></thead><tbody>'
+            . ($rows ?: '<tr><td colspan="5" class="px-4 py-12 text-center text-sm text-neutral-400">还没有拉新任务。<br>去 <a class="text-blue-600 underline" href="/admin.php?r=res">资源管理</a> 点「拉新」创建。</td></tr>')
+            . '</tbody></table></div>';
+        break;
+
+    case 'promo_accounts':
+        $accRows = '';
+        foreach (promo_accounts() as $a) {
+            $accRows .= '<tr class="border-b border-neutral-100 last:border-0">'
+                . '<td class="px-4 py-3 text-[13px] font-medium text-neutral-900">' . e((string) $a['label'] ?: '未命名') . '</td>'
+                . '<td class="px-4 py-3"><span class="tag-gray">' . e(ui_provider_name((string) $a['provider'])) . '</span></td>'
+                . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e(promo_mask_cookie((string) $a['cookie'])) . '</td>'
+                . '<td class="px-4 py-3 text-xs">'
+                . ((int) $a['enabled'] === 1
+                    ? '<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">启用</span>'
+                    : '<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-500">停用</span>')
+                . '</td>'
+                . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e(substr((string) $a['last_used'], 0, 16) ?: '—') . '</td>'
+                . '<td class="px-4 py-3 whitespace-nowrap">'
+                . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+                . '<input type="hidden" name="action" value="promo_account_toggle"><input type="hidden" name="id" value="' . (int) $a['id'] . '">'
+                . '<button class="rounded-md bg-white px-2 py-0.5 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">'
+                . ((int) $a['enabled'] === 1 ? '停用' : '启用') . '</button></form></td></tr>';
+        }
+
+        $provOpts = '';
+        foreach (UI_PROVIDERS as $pk => $pv) {
+            $provOpts .= '<option value="' . e($pk) . '">' . e($pv[0]) . '</option>';
+        }
+
+        $body = '<div class="grid items-start gap-5 lg:grid-cols-[380px_1fr]">'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
+            . '<h2 class="text-sm font-semibold">添加 / 更新账号</h2>'
+            . '<form method="post" class="mt-4 space-y-3"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+            . '<input type="hidden" name="action" value="promo_account">'
+            . '<input type="hidden" name="id" value="0">'
+            . '<div><label class="mb-1 block text-[11px] text-neutral-500">平台</label>'
+            . '<select class="input" name="provider">' . $provOpts . '</select></div>'
+            . '<div><label class="mb-1 block text-[11px] text-neutral-500">备注名</label>'
+            . '<input class="input" name="label" placeholder="例如 夸克主号"></div>'
+            . '<div><label class="mb-1 block text-[11px] text-neutral-500">Cookie</label>'
+            . '<textarea class="input h-auto py-2 font-mono text-[11px]" name="cookie" rows="4" required placeholder="浏览器登录后复制整条 Cookie"></textarea>'
+            . '<p class="mt-1 text-[11px] text-neutral-400">等同账号凭证，不要在公共环境粘贴。当前存 SQLite 明文，务必收紧库文件权限。</p></div>'
+            . '<div><label class="mb-1 block text-[11px] text-neutral-500">状态</label>'
+            . '<select class="input" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></div>'
+            . '<button class="btn w-full" type="submit">保存账号</button></form></section>'
+            . '<section class="overflow-hidden rounded-lg bg-white shadow-sm">'
+            . '<table class="w-full text-left"><thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">'
+            . '<tr><th class="px-4 py-2.5 font-medium">备注</th><th class="px-4 py-2.5 font-medium">平台</th>'
+            . '<th class="px-4 py-2.5 font-medium">Cookie</th><th class="px-4 py-2.5 font-medium">状态</th>'
+            . '<th class="px-4 py-2.5 font-medium">最近使用</th><th class="px-4 py-2.5 font-medium"></th></tr></thead><tbody>'
+            . ($accRows ?: '<tr><td colspan="6" class="px-4 py-12 text-center text-sm text-neutral-400">还没有账号。拉新转存必须先有夸克 Cookie。</td></tr>')
+            . '</tbody></table></section></div>';
+        break;
+
     case 'settings':
-        $body = '<div class="grid gap-5 lg:grid-cols-2">'
+        $spec = cfg_spec();
+        $body = '<div class="grid items-start gap-5 xl:grid-cols-[1fr_320px]">'
+            . '<div>' . cfg_render_form() . '</div>'
+            . '<aside class="space-y-5">'
             . '<section class="rounded-lg bg-white p-5 shadow-sm">'
-            . '<h2 class="text-sm font-semibold">站点</h2>'
-            . '<form method="post" class="mt-4 space-y-4"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
-            . '<input type="hidden" name="action" value="settings">'
-            . '<div><label class="mb-1 block text-[11px] text-neutral-500">站点名称</label>'
-            . '<input class="input" name="site_name" value="' . e(setting('site_name', (string) cfg('site_name'))) . '"></div>'
-            . '<div><label class="mb-1 block text-[11px] text-neutral-500">副标题</label>'
-            . '<input class="input" name="site_desc" value="' . e(setting('site_desc', (string) cfg('site_slogan'))) . '"></div>'
-            . '<div><label class="mb-1 block text-[11px] text-neutral-500">公告（留空不显示）</label>'
-            . '<textarea class="input h-auto py-2" name="notice" rows="2">' . e(setting('notice', '')) . '</textarea></div>'
-            . '<div><label class="mb-1 block text-[11px] text-neutral-500">开放投稿</label>'
-            . '<select class="input" name="submit_open"><option value="1"' . (setting('submit_open', '1') === '1' ? ' selected' : '') . '>开启</option>'
-            . '<option value="0"' . (setting('submit_open', '1') === '0' ? ' selected' : '') . '>关闭</option></select></div>'
-            . '<button class="btn" type="submit">保存</button></form></section>'
-            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
-            . '<h2 class="text-sm font-semibold">改密码</h2>'
+            . '<h2 class="text-sm font-semibold">改管理员密码</h2>'
             . '<form method="post" class="mt-4 space-y-4"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
             . '<input type="hidden" name="action" value="password">'
             . '<div><label class="mb-1 block text-[11px] text-neutral-500">新密码（≥8 位）</label>'
             . '<input class="input" name="new_password" type="password" minlength="8" required></div>'
-            . '<button class="btn" type="submit">更新密码</button></form>'
-            . '<h3 class="mb-2 mt-6 text-[11px] uppercase tracking-wide text-neutral-400">数据源配置</h3>'
-            . '<p class="text-xs leading-relaxed text-neutral-500">仓库地址、代理、GitHub token 在 '
-            . '<code class="rounded bg-neutral-100 px-1 py-0.5">src/config.local.php</code> 里配，保存即生效。</p>'
-            . '</section></div>';
+            . '<button class="btn" type="submit">更新密码</button></form></section>'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
+            . '<h2 class="text-sm font-semibold">当前生效</h2>'
+            . '<dl class="mt-3 space-y-1.5 text-[11px] text-neutral-500">'
+            . '<div class="flex justify-between gap-2"><dt>审核模式</dt><dd class="font-medium text-neutral-700">'
+            . e($spec['review_mode']['options'][cfg_get('review_mode')] ?? '-') . '</dd></div>'
+            . '<div class="flex justify-between gap-2"><dt>开放投稿</dt><dd class="font-medium text-neutral-700">'
+            . e($spec['submit_open']['options'][cfg_get('submit_open')] ?? '-') . '</dd></div>'
+            . '<div class="flex justify-between gap-2"><dt>拉新</dt><dd class="font-medium text-neutral-700">'
+            . e($spec['promo_open']['options'][cfg_get('promo_open')] ?? '-') . '</dd></div>'
+            . '<div class="flex justify-between gap-2"><dt>每页条数</dt><dd class="font-medium text-neutral-700">'
+            . e(cfg_get('search_page_size')) . '</dd></div>'
+            . '</dl>'
+            . '<h3 class="mb-2 mt-5 text-[11px] uppercase tracking-wide text-neutral-400">数据源</h3>'
+            . '<p class="text-[11px] leading-relaxed text-neutral-500">仓库地址、代理、GitHub token 在 '
+            . '<code class="rounded bg-neutral-100 px-1">src/config.local.php</code>，改完刷新即生效。</p>'
+            . '</section></aside></div>';
         break;
 
     default:
