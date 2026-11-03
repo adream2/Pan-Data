@@ -165,6 +165,25 @@ curl "https://your-domain/api.php?action=stats"     # 公开统计，不需要 k
 
 > 为什么不用 `raw.githubusercontent.com`：部分网络下 TLS 握手会被掐断。Contents API 稳定，代价是每小时 60 次限额（填了 `repo.token` 提到 5000）。
 
+## 热文件为什么有 8000 条上限
+
+数据涨到 2.3 万资源后，90 天全量热文件到了 **13.8MB**。实测跨境拉取只有约 40KB/s，
+180 秒超时都拉不完，PHP 站同步直接失败（报「拉取 resources.json 失败」）。
+
+所以 `tools/export.py` 加了 `--max-hot`（默认 8000），按 `posted_at` 倒序截取：
+
+| 项 | 值 |
+|---|---|
+| 热文件 | 最近 90 天里最新的 8000 条，**6.9MB** |
+| 被截掉的部分 | 在 `shards/*.json` 里，一个不少 |
+| `period.capped` | 被截断时标注「窗口内共 N 条，实际保留 M 条」 |
+
+热文件的定位是「最近活跃的那批」，不是「全部历史」。要全量就导分片。
+
+**另一个必须注意的点**：GitHub API 匿名请求限 60 次/小时，用 PHP 同步全量分片必然撞限。
+后台 → 设置 → 数据源 → **拉取用 Token** 必须填（有 `repo` 读权限即可），
+否则第 10 个分片之后全是 403。
+
 ## 定时任务
 
 ```cron
@@ -349,8 +368,11 @@ Apache 用户用 `public/.htaccess`（已写好同样的规则，需要 `mod_rew
 
 ```cron
 */30 * * * *  php /srv/pansou/web/bin/sync.php hot
-5    4 * * *  php /srv/pansou/web/bin/sync.php shard 2026-11
+5    4 * * *  php /srv/pansou/web/bin/sync.php all
 ```
+
+`all` 会遍历 index.json 里的全部分片，增量导入（幂等 upsert），
+首次约 15 分钟、之后每次只要拉有变化的片刻。
 
 ## 界面（照搬 urldb 的视觉语言）
 
