@@ -28,6 +28,9 @@ SHARD_DIR = ROOT / "data" / "shards"
 INDEX = ROOT / "data" / "index.json"
 SCHEMA_VERSION = "1.2"
 DEFAULT_DAYS = 90
+# 热文件条数上限。90 天全量在数据涨到 20k+ 后会到 14MB，
+# 跨境拉一次要 3 分钟以上（实测 40KB/s），前端和 PHP 站都吃不消。
+MAX_HOT = 8000
 
 JUNK_TITLE_RE = re.compile(r"最新集数$|^\s*$")
 
@@ -187,6 +190,8 @@ def main() -> int:
     ap.add_argument("--shard", choices=["quarter", "month"], default="month",
                     help="库存分片粒度；默认按月（单片约 5MB，季度会到 14MB）")
     ap.add_argument("--no-shards", action="store_true", help="只出热文件")
+    ap.add_argument("--max-hot", type=int, default=MAX_HOT,
+                    help=f"热文件条数上限（默认 {MAX_HOT}，0 = 不限制）")
     ap.add_argument("--pretty", action="store_true")
     args = ap.parse_args()
 
@@ -195,7 +200,17 @@ def main() -> int:
     total_links = len(rows)
 
     hot = all_resources if args.days <= 0 else [r for r in all_resources if within_days(r, args.days)]
+    # 按发布时间倒序取前 N 条：热文件的定位是「最近活跃」，不是「全部历史」
+    hot_total = len(hot)
+    if args.max_hot > 0 and len(hot) > args.max_hot:
+        hot = sorted(hot, key=lambda r: r.get("posted_at") or "", reverse=True)[:args.max_hot]
     hot_payload = envelope(hot, period={"mode": "hot", "days": args.days})
+    if len(hot) < hot_total:
+        hot_payload["period"]["capped"] = {
+            "kept": len(hot),
+            "in_window": hot_total,
+            "note": "热文件只保留窗口内最新的 N 条，更早的在分片里",
+        }
     hot_payload["counts"].update({
         "links": total_links,
         "links_in_window": sum(1 for r in rows if args.days <= 0 or within_days(r, args.days)),
@@ -208,7 +223,8 @@ def main() -> int:
         json.dumps(hot_payload, ensure_ascii=False, indent=2 if args.pretty else None) + "\n",
         encoding="utf-8",
     )
-    print(f"热文件 {len(hot)} 个资源 -> {out}（{out.stat().st_size/1024:.0f} KB）")
+    cap_note = f"（窗口内 {hot_total} 条，截取最新 {len(hot)} 条）" if len(hot) < hot_total else ""
+    print(f"热文件 {len(hot)} 个资源{cap_note} -> {out}（{out.stat().st_size/1024:.0f} KB）")
 
     if args.no_shards:
         return 0

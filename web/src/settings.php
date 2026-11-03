@@ -55,7 +55,7 @@ function cfg_spec(): array
         'repo_token'  => ['group' => 'source', 'label' => '拉取用 Token', 'desc' => '可选，私有仓库或提高 API 限额时填；留空用匿名', 'kind' => 'secret', 'def' => ''],
         'github_repo' => ['group' => 'source', 'label' => '采集仓库', 'desc' => '触发 Actions 用的 owner/repo，一般同数据仓库', 'kind' => 'text', 'def' => 'adream2/Pan-Data'],
         'github_token' => ['group' => 'source', 'label' => '采集触发 Token', 'desc' => '需要 actions:write 权限，用于后台一键触发云端采集', 'kind' => 'secret', 'def' => ''],
-        'repo_timeout' => ['group' => 'source', 'label' => '拉取超时（秒）', 'desc' => '跨境拉取慢就调大', 'kind' => 'int', 'def' => '120'],
+        'repo_timeout' => ['group' => 'source', 'label' => '拉取超时（秒）', 'desc' => '跨境拉取慢就调大；13MB 热文件实测需要 200s+', 'kind' => 'int', 'def' => '300'],
     ];
 }
 

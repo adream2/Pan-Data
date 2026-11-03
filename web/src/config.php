@@ -16,7 +16,7 @@ return [
         'dir'     => 'data',
         'token'   => '',     // 可选；填了能提高 API 限额
         'proxy'   => '',
-        'timeout' => 120,
+        'timeout' => 300,
     ],
 
     'github' => [
