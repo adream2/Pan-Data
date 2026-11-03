@@ -92,9 +92,14 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
         <svg class="size-3.5 text-cyan-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12" rx="2"/><path d="M3 8.5h14M7 3v3M13 3v3"/></svg>
         今日资源 <span class="ml-0.5 font-medium text-cyan-600"><?= number_format((int) $stats['today']) ?></span>
       </span>
-      <span class="inline-flex items-center gap-1">
+      <?php
+      // 「有效 389 / 总数 23,579」会让人以为站里只有 389 条能用。
+      // 实际是「已巡检的里面有效的」，未巡检不等于坏链，所以分开说。
+      $checkedN = (int) ($stats['valid'] ?? 0) + (int) ($stats['invalid'] ?? 0);
+      ?>
+      <span class="inline-flex items-center gap-1" title="已巡检 <?= number_format($checkedN) ?> 条，其中 <?= number_format((int) ($stats['valid'] ?? 0)) ?> 条有效">
         <svg class="size-3.5 text-emerald-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 10.5 4 4 8-9"/></svg>
-        有效链接 <span class="ml-0.5 font-medium text-emerald-600"><?= number_format((int) ($stats['valid'] ?? 0)) ?></span>
+        已校验 <span class="ml-0.5 font-medium text-emerald-600"><?= number_format($checkedN) ?></span>
       </span>
     </div>
     <span class="inline-flex items-center gap-1">

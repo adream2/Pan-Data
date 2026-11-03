@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: "本次最多巡检多少条（0 = 全部到期条目）"
-        default: "0"
+        description: "本次最多巡检多少条（0 = 全部到期条目，2 万+ 时不要用 0）"
+        default: "6000"
       recheck_days:
         description: "跳过 N 天内查过的"
         default: "7"
@@ -46,7 +46,8 @@ jobs:
         run: |
           python collector/check_links.py \
             --recheck-days "${{ github.event.inputs.recheck_days || '7' }}" \
-            --limit "${{ github.event.inputs.limit || '0' }}" \
+            --limit "${{ github.event.inputs.limit || '6000' }}" \
+            --workers 4 \
             --delay 0.8
 
       - name: Export contract

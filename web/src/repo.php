@@ -304,6 +304,7 @@ function repo_stats(): array
     $out['today_invalid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'invalid'
         AND substr(COALESCE(checked_at, updated_at), 1, 10) = date('now')")->fetchColumn();
     $out['valid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'valid'")->fetchColumn();
+    $out['invalid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'invalid'")->fetchColumn();
     $out['by_type'] = $pdo->query("SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type
         ORDER BY CASE type WHEN 'other' THEN 1 ELSE 0 END, c DESC")->fetchAll();
     $out['by_provider'] = $pdo->query('SELECT provider, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY provider ORDER BY c DESC')->fetchAll();

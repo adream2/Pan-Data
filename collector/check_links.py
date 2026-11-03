@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import argparse
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import json
 import random
 import re
@@ -148,7 +150,10 @@ def main() -> int:
     ap.add_argument("--provider", default="", help="只查某个平台，如 quark")
     ap.add_argument("--limit", type=int, default=0, help="最多查多少条")
     ap.add_argument("--recheck-days", type=float, default=0, help="跳过 N 天内查过的")
-    ap.add_argument("--delay", type=float, default=0.8, help="每次请求间隔（秒）")
+    ap.add_argument("--delay", type=float, default=0.8, help="每次请求间隔（秒），会被 --workers 摊薄")
+    ap.add_argument("--workers", type=int, default=4,
+                    help="并发数（默认 4）。串行查 2 万条要 5 小时，必须并发；"
+                         "但别调太高，夸克接口会对同一账号限流")
     ap.add_argument("--proxy", default=None)
     args = ap.parse_args()
 
@@ -181,7 +186,16 @@ def main() -> int:
     stats: dict[str, int] = {}
     t0 = time.time()
 
-    for i, row in enumerate(targets, 1):
+    # 串行版查 2.3 万条要 5 小时，云端一次任务跑不完；改成线程池。
+    # 并发数别太大：所有 worker 共用同一个网络出口和同一个网盘账号，
+    # 夸克对单账号有明显限流（429 / 41031），4-6 是个安全区间。
+    workers = max(1, min(args.workers, 12))
+    per_sleep = (args.delay / workers) if workers > 1 else args.delay
+    lock = threading.Lock()
+    done = 0
+
+    def work(row: dict) -> None:
+        nonlocal done
         checker = CHECKERS.get(row["provider"], check_http)
         try:
             res = checker(row, op)
@@ -193,11 +207,20 @@ def main() -> int:
         row["title_best"] = official or (row.get("title") or "")
         row["checked_at"] = now_iso()
         row["checked_ts"] = time.time()
-        stats[res["status"]] = stats.get(res["status"], 0) + 1
-        if i % 20 == 0 or i == len(targets):
-            mark = {"valid": "✓", "invalid": "✗", "uncertain": "?"}.get(res["status"], "·")
-            print(f"  {i}/{len(targets)} {mark} {res['status']:<13} {res.get('reason','')[:24]}")
-        time.sleep(args.delay + random.random() * 0.3)
+        with lock:
+            stats[res["status"]] = stats.get(res["status"], 0) + 1
+            done += 1
+            if done % 20 == 0 or done == len(targets):
+                mark = {"valid": "✓", "invalid": "✗", "uncertain": "?"}.get(res["status"], "·")
+                print(f"  {done}/{len(targets)} {mark} {res['status']:<13} {res.get('reason', '')[:24]}", flush=True)
+        time.sleep(per_sleep + random.random() * 0.2)
+
+    if workers == 1:
+        for row in targets:
+            work(row)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(work, targets))
 
     # 巡检结果会改变「谁是当前版本」，所以要重新收敛一次
     try:
