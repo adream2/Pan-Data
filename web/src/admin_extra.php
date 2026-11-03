@@ -153,8 +153,8 @@ function admin_extra_body(string $route): string
                     . '<button class="rounded-md bg-white px-2 py-1 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">发 Key</button></form>'
                     . '</div></td></tr>';
             }
-            return '<div class="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80"><table class="w-full text-left">'
-                . '<thead class="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400"><tr>'
+            return '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
+                . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white"><tr>'
                 . '<th class="px-4 py-2.5 font-medium">用户</th><th class="px-4 py-2.5 font-medium">状态</th>'
                 . '<th class="px-4 py-2.5 font-medium">投稿</th><th class="px-4 py-2.5 font-medium">收藏</th>'
                 . '<th class="px-4 py-2.5 font-medium">API 到期</th><th class="px-4 py-2.5 font-medium">操作</th>'
@@ -184,7 +184,7 @@ function admin_extra_body(string $route): string
                     . '</div></td></tr>';
             }
             return '<div class="grid gap-5 lg:grid-cols-2">'
-                . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+                . '<section class="rounded-lg bg-white p-5 shadow-sm">'
                 . '<h2 class="text-sm font-semibold">添加网盘账号</h2>'
                 . '<p class="mt-1 text-xs text-neutral-500">Cookie 用于自动转存/分享，明文存库，建议只在可信内网使用。</p>'
                 . '<form method="post" class="mt-3 space-y-3"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
@@ -198,7 +198,7 @@ function admin_extra_body(string $route): string
                 . '<div><label class="mb-1 block text-[11px] text-neutral-500">Cookie</label>'
                 . '<textarea class="input h-24 py-2 font-mono text-[11px]" name="cookie" placeholder="粘贴浏览器整条 Cookie"></textarea></div>'
                 . '<button class="btn" type="submit">保存账号</button></form></section>'
-                . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+                . '<section class="rounded-lg bg-white p-5 shadow-sm">'
                 . '<h2 class="mb-3 text-sm font-semibold">已配置账号</h2>'
                 . '<table class="w-full text-left">' . ($tr ?: '<tr><td class="py-8 text-center text-xs text-neutral-400">还没有账号</td></tr>')
                 . '</table></section></div>';
@@ -229,8 +229,8 @@ function admin_extra_body(string $route): string
             return '<div class="mb-4 flex items-center gap-2 text-xs text-neutral-500">'
                 . '<span class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">待处理 ' . $open . '</span>'
                 . '<span>处理「失效」会自动把资源标记为 invalid</span></div>'
-                . '<div class="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80"><table class="w-full text-left">'
-                . '<thead class="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400"><tr>'
+                . '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
+                . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white"><tr>'
                 . '<th class="px-4 py-2.5 font-medium">资源</th><th class="px-4 py-2.5 font-medium">类型</th>'
                 . '<th class="px-4 py-2.5 font-medium">备注</th><th class="px-4 py-2.5 font-medium">时间</th>'
                 . '<th class="px-4 py-2.5 font-medium">处理</th></tr></thead><tbody>'
@@ -239,7 +239,7 @@ function admin_extra_body(string $route): string
 
         case 'bulk':
             return '<div class="grid gap-5 lg:grid-cols-3">'
-                . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80 lg:col-span-2">'
+                . '<section class="rounded-lg bg-white p-5 shadow-sm lg:col-span-2">'
                 . '<h2 class="text-sm font-semibold">批量录入</h2>'
                 . '<p class="mt-1 text-xs text-neutral-500">每行一条：<code class="rounded bg-neutral-100 px-1">标题 链接</code> 或只贴链接。重复链接自动跳过。</p>'
                 . '<form method="post" class="mt-3"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
@@ -268,18 +268,18 @@ function admin_dashboard_extra(): string
     $todayClick = (int) db()->query("SELECT COALESCE(SUM(count),0) FROM clicks WHERE day = '{$today}'")->fetchColumn();
     $openReports = (int) db()->query("SELECT COUNT(*) FROM reports WHERE status = 'open'")->fetchColumn();
 
-    $delta = $yNew > 0 ? round(($todayNew - $yNew) * 100 / $yNew) : ($todayNew > 0 ? 100 : 0);
-    $deltaCls = $delta >= 0 ? 'text-emerald-600' : 'text-rose-600';
+    // 环比在导入当天必然是 -100%，纯噪音；改成"近 7 日"更有信息量
+    $weekNew = (int) db()->query("SELECT COUNT(*) FROM resources WHERE date(created_at) >= date('now','-6 days')")->fetchColumn();
+    $weekHint = ' · 近 7 日 ' . number_format($weekNew);
 
     $kpi = '<div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">'
-        . '<div class="rounded-xl bg-white p-4 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $todayNew
-        . ' <span class="text-xs font-normal ' . $deltaCls . '">' . ($delta >= 0 ? '+' : '') . $delta . '%</span></div>'
-        . '<div class="mt-0.5 text-xs text-neutral-400">今日入库（昨 ' . $yNew . '）</div></div>'
-        . '<div class="rounded-xl bg-white p-4 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $todaySearch . '</div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $todayNew . '</div>'
+        . '<div class="mt-0.5 text-xs text-neutral-400">今日入库' . $weekHint . '</div></div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $todaySearch . '</div>'
         . '<div class="mt-0.5 text-xs text-neutral-400">今日搜索</div></div>'
-        . '<div class="rounded-xl bg-white p-4 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $todayClick . '</div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $todayClick . '</div>'
         . '<div class="mt-0.5 text-xs text-neutral-400">今日详情点击</div></div>'
-        . '<div class="rounded-xl bg-white p-4 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $openReports . '</div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $openReports . '</div>'
         . '<div class="mt-0.5 text-xs text-neutral-400">待处理举报</div></div></div>';
 
     $wordRows = '';
@@ -294,10 +294,10 @@ function admin_dashboard_extra(): string
             . '<td class="py-2 text-right text-xs tabular-nums text-neutral-500">' . (int) $r['hits'] . '</td></tr>';
     }
 
-    return $kpi . '<div class="mt-5 grid gap-5 lg:grid-cols-2">'
-        . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><h2 class="mb-2 text-sm font-semibold">近 7 天热搜</h2>'
+    return $kpi . '<div class="mt-5 grid items-start gap-5 lg:grid-cols-2">'
+        . '<section class="rounded-lg bg-white p-5 shadow-sm"><h2 class="mb-2 text-sm font-semibold">近 7 天热搜</h2>'
         . '<table class="w-full">' . ($wordRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无数据</td></tr>') . '</table></section>'
-        . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><h2 class="mb-2 text-sm font-semibold">近 7 天热门资源</h2>'
+        . '<section class="rounded-lg bg-white p-5 shadow-sm"><h2 class="mb-2 text-sm font-semibold">近 7 天热门资源</h2>'
         . '<table class="w-full">' . ($resRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无数据</td></tr>') . '</table></section>'
         . '</div>';
 }

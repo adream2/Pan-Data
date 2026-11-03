@@ -109,6 +109,14 @@ function set_setting(string $key, string $value): void
     $stmt->execute([':k' => $key, ':v' => $value]);
 }
 
+function render_view(string $name, array $data = []): string
+{
+    extract($data, EXTR_SKIP);
+    ob_start();
+    require APP_ROOT . '/src/views/' . $name . '.php';
+    return (string) ob_get_clean();
+}
+
 function view(string $name, array $data = []): void
 {
     extract($data, EXTR_SKIP);

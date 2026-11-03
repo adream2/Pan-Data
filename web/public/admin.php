@@ -7,6 +7,7 @@ require_once __DIR__ . '/../src/auth.php';
 require_once __DIR__ . '/../src/moderation.php';
 require_once __DIR__ . '/../src/user.php';
 require_once __DIR__ . '/../src/admin_extra.php';
+require_once __DIR__ . '/../src/ui.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -219,8 +220,8 @@ $nav = '';
 foreach ($navItems as $k => $label) {
     $active = $route === $k;
     $cls = $active
-        ? 'flex items-center justify-between rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white'
-        : 'flex items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900';
+        ? 'admin-nav-link admin-nav-active justify-between'
+        : 'admin-nav-link justify-between';
     $badge = ($k === 'subs' && $pending > 0)
         ? '<span class="rounded-full bg-rose-500 px-1.5 text-[10px] font-medium leading-4 text-white">' . $pending . '</span>'
         : '';
@@ -271,8 +272,8 @@ switch ($route) {
                 . '<td class="px-4 py-3 align-top">' . $ops . '</td></tr>';
         }
         $body = '<div class="mb-4 flex gap-2">' . $tabs . '</div>'
-            . '<div class="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80"><table class="w-full text-left">'
-            . '<thead class="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400">'
+            . '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
+            . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">'
             . '<tr><th class="px-4 py-2.5 font-medium">内容</th><th class="px-4 py-2.5 font-medium">风控</th>'
             . '<th class="px-4 py-2.5 font-medium">时间</th><th class="px-4 py-2.5 font-medium">操作</th></tr></thead><tbody>'
             . ($tr ?: '<tr><td colspan="4" class="px-4 py-10 text-center text-sm text-neutral-400">暂无投稿</td></tr>')
@@ -288,8 +289,11 @@ switch ($route) {
             $tr .= '<tr class="border-b border-neutral-100 last:border-0">'
                 . '<td class="px-4 py-3"><div class="text-[13px] font-medium text-neutral-900">' . e((string) $r['title']) . '</div>'
                 . '<div class="mt-1 break-all font-mono text-[11px] text-neutral-400">' . e((string) $r['share_url']) . '</div></td>'
-                . '<td class="px-4 py-3 text-xs text-neutral-500">' . e((string) $r['provider']) . ' · ' . e((string) $r['type']) . '</td>'
-                . '<td class="px-4 py-3 text-xs text-neutral-500">' . e((string) $r['status']) . '</td>'
+                . '<td class="px-4 py-3 whitespace-nowrap text-xs text-neutral-500">'
+                . '<span class="inline-flex items-center gap-1"><i class="dot" style="background:' . e(ui_provider_color((string) $r['provider'])) . '"></i>'
+                . e(ui_provider_name((string) $r['provider'])) . '</span>'
+                . '<div class="mt-0.5 text-[11px] text-neutral-400">' . e(ui_type_name((string) $r['type'])) . '</div></td>'
+                . '<td class="px-4 py-3 text-xs">' . ui_status((string) $r['status']) . '</td>'
                 . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e(substr((string) ($r['posted_at'] ?? ''), 0, 10)) . '</td>'
                 . '<td class="px-4 py-3"><form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
                 . '<input type="hidden" name="action" value="toggle"><input type="hidden" name="field" value="hidden">'
@@ -300,8 +304,8 @@ switch ($route) {
             . '<input type="hidden" name="r" value="res">'
             . '<input class="input" name="q" value="' . e($q) . '" placeholder="按关键词搜索资源">'
             . '<button class="btn shrink-0" type="submit">搜索</button></form>'
-            . '<div class="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80"><table class="w-full text-left">'
-            . '<thead class="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400">'
+            . '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
+            . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">'
             . '<tr><th class="px-4 py-2.5 font-medium">资源</th><th class="px-4 py-2.5 font-medium">平台/类型</th>'
             . '<th class="px-4 py-2.5 font-medium">状态</th><th class="px-4 py-2.5 font-medium">发布</th><th class="px-4 py-2.5 font-medium"></th></tr></thead><tbody>'
             . ($tr ?: '<tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-400">没有数据，先去「同步与采集」导入</td></tr>')
@@ -342,7 +346,7 @@ switch ($route) {
         $ghConfigured = (string) cfg('github.token', '') !== '';
 
         $body = '<div class="grid gap-5 lg:grid-cols-2">'
-            . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="text-sm font-semibold">仓库导入</h2>'
             . '<p class="mt-1 text-xs text-neutral-500">从数据仓库拉热文件，覆盖最近 90 天。'
             . ($indexErr !== '' ? '<span class="ml-1 text-rose-600">' . e($indexErr) . '</span>' : '') . '</p>'
@@ -353,7 +357,7 @@ switch ($route) {
             . '<div class="max-h-64 overflow-auto rounded-lg ring-1 ring-neutral-100"><table class="w-full text-left">'
             . ($shards ?: '<tr><td class="px-3 py-6 text-center text-xs text-neutral-400">没有拿到分片清单</td></tr>')
             . '</table></div></section>'
-            . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="text-sm font-semibold">本地采集</h2>'
             . '<p class="mt-1 text-xs text-neutral-500">直接抓 t.me/s 网页预览，兜底用。</p>'
             . '<form method="post" class="mt-3 space-y-3"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
@@ -372,14 +376,14 @@ switch ($route) {
                   . '<button class="btn shrink-0" type="submit">触发</button></form>'
                 : '<p class="text-xs text-neutral-400">未配置 github.token，无法从后台触发</p>')
             . '</section></div>'
-            . '<section class="mt-5 rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+            . '<section class="mt-5 rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="mb-3 text-sm font-semibold">最近日志</h2><table class="w-full text-left">'
             . ($logRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无</td></tr>') . '</table></section>';
         break;
 
     case 'settings':
         $body = '<div class="grid gap-5 lg:grid-cols-2">'
-            . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="text-sm font-semibold">站点</h2>'
             . '<form method="post" class="mt-4 space-y-4"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
             . '<input type="hidden" name="action" value="settings">'
@@ -393,7 +397,7 @@ switch ($route) {
             . '<select class="input" name="submit_open"><option value="1"' . (setting('submit_open', '1') === '1' ? ' selected' : '') . '>开启</option>'
             . '<option value="0"' . (setting('submit_open', '1') === '0' ? ' selected' : '') . '>关闭</option></select></div>'
             . '<button class="btn" type="submit">保存</button></form></section>'
-            . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="text-sm font-semibold">改密码</h2>'
             . '<form method="post" class="mt-4 space-y-4"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
             . '<input type="hidden" name="action" value="password">'
@@ -410,27 +414,28 @@ switch ($route) {
         $s = repo_stats();
         $cards = '';
         foreach ([['资源总数', $s['total']], ['今日新增', $s['today']], ['待审投稿', $s['pending']], ['已下架', $s['hidden']]] as [$label, $value]) {
-            $cards .= '<div class="rounded-xl bg-white p-4 ring-1 ring-neutral-200/80">'
+            $cards .= '<div class="kpi">'
                 . '<div class="text-2xl font-semibold tabular-nums">' . number_format((int) $value) . '</div>'
                 . '<div class="mt-0.5 text-xs text-neutral-400">' . $label . '</div></div>';
         }
         $typeRows = '';
         foreach ($s['by_type'] as $t) {
-            $typeRows .= '<tr class="border-b border-neutral-100 last:border-0"><td class="py-2 text-xs text-neutral-600">'
-                . e((string) $t['type']) . '</td><td class="py-2 text-right text-xs tabular-nums text-neutral-500">'
+            $typeRows .= '<tr class="border-b border-gray-100 last:border-0"><td class="py-2 text-xs text-gray-600">'
+                . e(ui_type_name((string) $t['type'])) . '</td><td class="py-2 text-right text-xs tabular-nums text-gray-500">'
                 . number_format((int) $t['c']) . '</td></tr>';
         }
         $provRows = '';
         foreach ($s['by_provider'] as $p) {
-            $provRows .= '<tr class="border-b border-neutral-100 last:border-0"><td class="py-2 text-xs text-neutral-600">'
-                . e((string) $p['provider']) . '</td><td class="py-2 text-right text-xs tabular-nums text-neutral-500">'
-                . number_format((int) $p['c']) . '</td></tr>';
+            $provRows .= '<tr class="border-b border-gray-100 last:border-0"><td class="py-2 text-xs text-gray-600">'
+                . '<span class="inline-flex items-center gap-1.5"><i class="dot" style="background:' . e(ui_provider_color((string) $p['provider'])) . '"></i>'
+                . e(ui_provider_name((string) $p['provider'])) . '</span></td>'
+                . '<td class="py-2 text-right text-xs tabular-nums text-gray-500">' . number_format((int) $p['c']) . '</td></tr>';
         }
         $body = '<div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">' . $cards . '</div>'
-            . '<div class="grid gap-5 lg:grid-cols-2">'
-            . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><h2 class="mb-2 text-sm font-semibold">按类型</h2>'
+            . '<div class="grid items-start gap-5 lg:grid-cols-2">'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm"><h2 class="mb-2 text-sm font-semibold">按类型</h2>'
             . '<table class="w-full">' . ($typeRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无</td></tr>') . '</table></section>'
-            . '<section class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><h2 class="mb-2 text-sm font-semibold">按平台</h2>'
+            . '<section class="rounded-lg bg-white p-5 shadow-sm"><h2 class="mb-2 text-sm font-semibold">按平台</h2>'
             . '<table class="w-full">' . ($provRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无</td></tr>') . '</table></section>'
             . '</div>';
         break;
@@ -447,7 +452,7 @@ if ($route === 'dashboard') {
 $flashHtml = $flash
     ? '<div class="mb-5 rounded-lg px-4 py-3 text-sm ' . ($flash['type'] === 'err'
         ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'
-        : 'bg-brand-50 text-brand-700 ring-1 ring-brand-100') . '">' . e($flash['msg']) . '</div>'
+        : 'bg-blue-50 text-blue-700 ring-1 ring-blue-100') . '">' . e($flash['msg']) . '</div>'
     : '';
 $adminName = e((string) $admin['name']);
 $csrfField = '<input type="hidden" name="_csrf" value="' . csrf_token() . '">';
@@ -456,23 +461,27 @@ $routeTitle = $navItems[$route] ?? '概览';
 echo <<<HTML
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{$routeTitle} · 盘搜后台</title><link rel="stylesheet" href="/assets/app.css"></head>
-<body class="min-h-screen bg-neutral-50">
+<body class="min-h-screen bg-gray-50">
 <div class="flex min-h-screen">
-  <aside class="hidden w-56 shrink-0 flex-col border-r border-neutral-200/80 bg-white px-3 py-5 sm:flex">
-    <div class="mb-6 flex items-center gap-2 px-2">
-      <span class="grid size-8 place-items-center rounded-lg bg-neutral-900 text-sm font-semibold text-white">盘</span>
-      <div><div class="text-[13px] font-semibold leading-4">盘搜</div><div class="text-[10px] text-neutral-400">管理后台</div></div>
-    </div>
+  <aside class="hidden w-56 shrink-0 flex-col bg-slate-800 px-3 py-5 sm:flex">
+    <a href="/" class="mb-6 flex items-center gap-2 px-2" title="返回前台">
+      <span class="grid size-8 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">盘</span>
+      <span><span class="block text-[13px] font-semibold leading-4 text-white">盘搜</span>
+      <span class="block text-[10px] text-slate-400">管理后台</span></span>
+    </a>
     <nav class="flex flex-col gap-0.5">{$nav}</nav>
-    <div class="mt-auto flex items-center justify-between px-2 pt-4 text-xs text-neutral-400">
+    <div class="mt-auto flex items-center justify-between border-t border-white/10 px-2 pt-3 text-xs text-slate-400">
       <span>{$adminName}</span>
       <form method="post">{$csrfField}<input type="hidden" name="action" value="logout">
-        <button class="transition hover:text-neutral-700" type="submit">退出</button></form>
+        <button class="transition hover:text-white" type="submit">退出</button></form>
     </div>
   </aside>
   <main class="min-w-0 flex-1 px-4 py-6 sm:px-8">
-    <div class="mb-4 flex gap-1 overflow-x-auto sm:hidden">{$nav}</div>
-    <h1 class="mb-5 text-lg font-semibold tracking-tight">{$routeTitle}</h1>
+    <div class="mb-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-800 p-1.5 sm:hidden">{$nav}</div>
+    <div class="mb-5 flex items-center justify-between">
+      <h1 class="text-lg font-semibold tracking-tight text-gray-900">{$routeTitle}</h1>
+      <a href="/" class="text-xs text-gray-400 transition hover:text-blue-600">查看前台 →</a>
+    </div>
     {$flashHtml}{$body}
   </main>
 </div>

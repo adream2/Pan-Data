@@ -133,9 +133,24 @@ server {
 
 目录权限：`storage/` 需要 web 用户可写（SQLite + 限流文件）。
 
+## 界面（照搬 urldb 的视觉语言）
+
+前台结构对齐 [ctwj/urldb](https://github.com/ctwj/urldb)：深色圆角页头 + 圆形搜索框 + 平台/类型胶囊 + 深色表头的资源表，
+桌面端用表格、移动端自动切成卡片流。差异是**没有文件缩略图**（我们只存链接），改用「首字 + 平台品牌色」的封面块。
+
+配色：`slate-800` 深色块 + `blue-600` 主色 + `gray-50` 背景，只有一套亮色主题（不做暗色模式，避免每个模板都要维护两套类名）。
+
+| 页面 | 文件 |
+|---|---|
+| 列表（首页/搜索共用） | `src/views/list.php` |
+| 详情 | `src/views/detail.php` |
+| 投稿 | `src/views/submit.php` |
+| 外壳（页头/公告/页脚） | `src/views/layout.php` |
+| 视图辅助（高亮/封面/胶囊/分页） | `src/ui.php` |
+
 ## 样式构建（Tailwind CSS 4）
 
-界面用 Tailwind 工具类编写，产物已提交（`public/assets/app.css`，约 31KB），**部署不需要 Node**。
+界面用 Tailwind 工具类编写，产物已提交（`public/assets/app.css`，约 48KB），**部署不需要 Node**。
 
 改样式才需要：
 
@@ -145,8 +160,12 @@ npm run build        # 一次性编译 + 压缩
 npm run dev          # 监听改动自动重编译
 ```
 
-源文件：`src/styles.css`（`@theme` 定义品牌色，`@layer components` 定义 `.card/.btn/.chip/.input` 等复用类）。
-新增页面时 Tailwind 会自动扫描 `public/**/*.php` 和 `src/views/**/*.php`，不用手动维护 safelist。
+源文件 `src/styles.css`：`@layer components` 里定义 `.site-header/.pill/.res-table/.cover/.admin-nav-link` 等复用类。
+
+**一个坑记在这里**：Tailwind 4 只在某个 theme 变量被工具类用到时才注入 `:root`。
+如果某色只出现在 `@apply` 里（比如只在 `.admin-nav-link` 用了 `text-slate-300`），变量不会生成，
+编译结果引用一个不存在的 `var(--color-slate-300)` → 颜色继承成黑色（深色侧栏上就是"看不见字"）。
+所以深色区域的文字颜色在 `src/styles.css` 末尾用显式色值兜底。
 
 ## 目录结构
 

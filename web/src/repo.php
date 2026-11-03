@@ -274,7 +274,11 @@ function repo_stats(): array
     $out['hidden'] = (int) $pdo->query('SELECT COUNT(*) FROM resources WHERE hidden = 1')->fetchColumn();
     $out['today'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE substr(posted_at,1,10) = date('now')")->fetchColumn();
     $out['pending'] = (int) $pdo->query("SELECT COUNT(*) FROM submissions WHERE status = 'pending'")->fetchColumn();
-    $out['by_type'] = $pdo->query('SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type ORDER BY c DESC')->fetchAll();
+    $out['today_invalid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'invalid'
+        AND substr(COALESCE(checked_at, updated_at), 1, 10) = date('now')")->fetchColumn();
+    $out['valid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'valid'")->fetchColumn();
+    $out['by_type'] = $pdo->query("SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type
+        ORDER BY CASE type WHEN 'other' THEN 1 ELSE 0 END, c DESC")->fetchAll();
     $out['by_provider'] = $pdo->query('SELECT provider, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY provider ORDER BY c DESC')->fetchAll();
     $out['by_status'] = $pdo->query("SELECT status, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY status ORDER BY c DESC")->fetchAll();
     $out['months'] = $pdo->query("SELECT substr(posted_at,1,7) m, COUNT(*) c FROM resources WHERE posted_at IS NOT NULL
@@ -285,7 +289,8 @@ function repo_stats(): array
 function repo_facets(): array
 {
     return [
-        'types'     => db()->query('SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type ORDER BY c DESC')->fetchAll(),
+        'types'     => db()->query("SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type
+        ORDER BY CASE type WHEN 'other' THEN 1 ELSE 0 END, c DESC")->fetchAll(),
         'providers' => db()->query('SELECT provider, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY provider ORDER BY c DESC')->fetchAll(),
         'years'     => db()->query('SELECT year, COUNT(*) c FROM resources WHERE hidden = 0 AND year IS NOT NULL GROUP BY year ORDER BY year DESC LIMIT 12')->fetchAll(),
     ];

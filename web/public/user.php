@@ -73,7 +73,7 @@ $title = '用户中心 - ' . setting('site_name', (string) cfg('site_name'));
 if ($user === null) {
     $f = flash();
     $flashHtml = $f ? '<div class="mb-4 rounded-lg px-3.5 py-2.5 text-sm ' . ($f['type'] === 'err'
-        ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200' : 'bg-brand-50 text-brand-700 ring-1 ring-brand-100') . '">' . e($f['msg']) . '</div>' : '';
+        ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200' : 'bg-blue-50 text-blue-700 ring-1 ring-blue-100') . '">' . e($f['msg']) . '</div>' : '';
 
     $isLogin = $route !== 'register';
     $body = '<div class="mx-auto max-w-sm pt-16">'
@@ -94,8 +94,8 @@ if ($user === null) {
         . '</form>'
         . '<p class="mt-4 text-center text-xs text-neutral-400">'
         . ($isLogin
-            ? '还没有账号？<a class="text-brand-600 hover:underline" href="/user?r=register">注册</a>'
-            : '已有账号？<a class="text-brand-600 hover:underline" href="/user?r=login">登录</a>')
+            ? '还没有账号？<a class="text-blue-600 hover:underline" href="/user?r=register">注册</a>'
+            : '已有账号？<a class="text-blue-600 hover:underline" href="/user?r=login">登录</a>')
         . '</p></div></div>';
     view('layout', ['content' => $body, 'title' => $title]);
     exit;
@@ -116,17 +116,17 @@ $tabs = '';
 foreach (['me' => '概览', 'subs' => '我的投稿', 'favs' => '我的收藏', 'reports' => '我的举报', 'api' => 'API 密钥'] as $k => $label) {
     $active = $tab === $k;
     $tabs .= '<a href="/user?r=' . $k . '" class="rounded-lg px-3 py-1.5 text-xs font-medium transition '
-        . ($active ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900') . '">' . $label . '</a>';
+        . ($active ? 'bg-slate-800 text-white' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900') . '">' . $label . '</a>';
 }
 
 $panel = '';
 if ($tab === 'me') {
     $panel = '<div class="grid gap-3 sm:grid-cols-3">'
-        . '<div class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $counts['subs'] . '</div><div class="mt-0.5 text-xs text-neutral-400">投稿</div></div>'
-        . '<div class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $counts['favs'] . '</div><div class="mt-0.5 text-xs text-neutral-400">收藏</div></div>'
-        . '<div class="rounded-xl bg-white p-5 ring-1 ring-neutral-200/80"><div class="text-2xl font-semibold tabular-nums">' . $counts['reports'] . '</div><div class="mt-0.5 text-xs text-neutral-400">举报</div></div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $counts['subs'] . '</div><div class="mt-0.5 text-xs text-neutral-400">投稿</div></div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $counts['favs'] . '</div><div class="mt-0.5 text-xs text-neutral-400">收藏</div></div>'
+        . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $counts['reports'] . '</div><div class="mt-0.5 text-xs text-neutral-400">举报</div></div>'
         . '</div>'
-        . '<div class="mt-5 rounded-xl bg-white p-5 ring-1 ring-neutral-200/80">'
+        . '<div class="mt-5 kpi">'
         . '<h2 class="text-sm font-semibold">账号信息</h2>'
         . '<dl class="mt-3 space-y-2 text-sm">'
         . '<div class="flex justify-between"><dt class="text-neutral-500">用户名</dt><dd>' . e((string) $user['username']) . '</dd></div>'
@@ -150,7 +150,7 @@ if ($tab === 'me') {
             . '<td class="px-4 py-3"><span class="rounded-full px-2 py-0.5 text-[11px] ring-1 ' . $cls . '">' . e((string) $s['status']) . '</span></td>'
             . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e(substr((string) $s['created_at'], 0, 10)) . '</td></tr>';
     }
-    $panel = '<div class="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80"><table class="w-full text-left">'
+    $panel = '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
         . '<thead class="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400"><tr>'
         . '<th class="px-4 py-2.5 font-medium">资源</th><th class="px-4 py-2.5 font-medium">状态</th><th class="px-4 py-2.5 font-medium">提交</th>'
         . '</tr></thead><tbody>' . ($rows ?: '<tr><td colspan="3" class="px-4 py-10 text-center text-sm text-neutral-400">还没有投稿</td></tr>')
@@ -179,7 +179,7 @@ if ($tab === 'me') {
             . '<td class="px-4 py-3 text-[11px] text-neutral-400">' . e((string) ($r['note'] ?? '')) . '</td>'
             . '<td class="px-4 py-3 text-xs">' . e((string) $r['status']) . '</td></tr>';
     }
-    $panel = '<div class="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80"><table class="w-full text-left">'
+    $panel = '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
         . '<thead class="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400"><tr>'
         . '<th class="px-4 py-2.5 font-medium">资源</th><th class="px-4 py-2.5 font-medium">类型</th>'
         . '<th class="px-4 py-2.5 font-medium">备注</th><th class="px-4 py-2.5 font-medium">状态</th></tr></thead><tbody>'
@@ -188,7 +188,7 @@ if ($tab === 'me') {
 } else {
     $key = (string) ($user['api_key'] ?? '');
     $expires = (string) ($user['api_expires_at'] ?? '');
-    $panel = '<div class="rounded-xl bg-white p-6 ring-1 ring-neutral-200/80">'
+    $panel = '<div class="rounded-lg bg-white p-6 shadow-sm">'
         . '<h2 class="text-sm font-semibold">API 密钥</h2>'
         . '<p class="mt-1 text-xs text-neutral-500">90 天有效，过期后重新生成即可。请勿泄露。</p>'
         . ($key !== '' && strtotime($expires) > time()
