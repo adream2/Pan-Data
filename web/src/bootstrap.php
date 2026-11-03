@@ -94,14 +94,14 @@ function csrf_check(): void
 
 function setting(string $key, ?string $default = null): ?string
 {
-    static $cache = null;
-    if ($cache === null) {
-        $cache = [];
+    // 用全局而非函数内 static：set_setting 需要能让缓存失效
+    if (!isset($GLOBALS['__settings_cache']) || !is_array($GLOBALS['__settings_cache'])) {
+        $GLOBALS['__settings_cache'] = [];
         foreach (db()->query('SELECT k, v FROM settings') as $row) {
-            $cache[$row['k']] = $row['v'];
+            $GLOBALS['__settings_cache'][$row['k']] = $row['v'];
         }
     }
-    return $cache[$key] ?? $default;
+    return $GLOBALS['__settings_cache'][$key] ?? $default;
 }
 
 function set_setting(string $key, string $value): void
@@ -109,6 +109,8 @@ function set_setting(string $key, string $value): void
     $stmt = db()->prepare('INSERT INTO settings(k, v) VALUES(:k, :v)
         ON CONFLICT(k) DO UPDATE SET v = excluded.v');
     $stmt->execute([':k' => $key, ':v' => $value]);
+    // 保存后立即生效：否则同一进程内后续读取还是旧值
+    $GLOBALS['__settings_cache'][$key] = $value;
 }
 
 function render_view(string $name, array $data = []): string

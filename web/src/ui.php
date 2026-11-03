@@ -73,8 +73,27 @@ function ui_hl(string $text, string $kw = ''): string
     return $out;
 }
 
-/** 首字封面块（我们没有网盘缩略图，用平台色 + 首字代替） */
+/** 封面：有刮削到的海报就用图片，否则回退到「平台色 + 首字」色块 */
 function ui_cover(array $row, int $px = 80): string
+{
+    if (function_exists('poster_of')) {
+        $poster = poster_of((string) ($row['id'] ?? ''));
+        if ($poster !== null && ($poster['poster_path'] ?? '') !== '') {
+            $size = $px >= 76 ? 'w185' : 'w154';
+            $src = poster_url($poster, $size);
+            // 图片挂了（CDN 被墙/被盗链）就切回色块，不留破图
+            return '<span class="cover-wrap" style="width:' . $px . 'px;height:' . $px . 'px">'
+                . '<img class="cover-img" src="' . e($src) . '" alt="" loading="lazy" decoding="async"'
+                . ' onerror="this.parentNode.classList.add(\'is-broken\')">'
+                . '<span class="cover-fallback">' . ui_cover_initial($row, $px) . '</span>'
+                . '</span>';
+        }
+    }
+    return ui_cover_initial($row, $px);
+}
+
+/** 首字色块（无海报时的兜底） */
+function ui_cover_initial(array $row, int $px = 80): string
 {
     $colors = UI_PROVIDERS[$row['provider']][2] ?? ['#64748b', '#334155'];
     $source = trim((string) ($row['core_title'] ?: $row['title']));

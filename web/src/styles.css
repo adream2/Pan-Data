@@ -139,6 +139,23 @@
            text-lg font-semibold text-white;
   }
 
+  /* ---------- 封面（海报 or 首字色块） ---------- */
+  .cover-wrap {
+    @apply relative inline-flex shrink-0;
+  }
+  .cover-wrap .cover-img {
+    @apply size-full rounded border border-gray-200 object-cover;
+  }
+  .cover-wrap .cover-fallback {
+    @apply hidden;
+  }
+  .cover-wrap.is-broken .cover-img {
+    @apply hidden;
+  }
+  .cover-wrap.is-broken .cover-fallback {
+    @apply flex;
+  }
+
   /* ---------- 标签 ---------- */
   .tag {
     @apply inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100

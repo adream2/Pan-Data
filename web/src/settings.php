@@ -53,6 +53,19 @@ function cfg_spec(): array
         'github_repo' => ['group' => 'source', 'label' => '采集仓库', 'desc' => '触发 Actions 用的 owner/repo，一般同数据仓库', 'kind' => 'text', 'def' => 'adream2/Pan-Data'],
         'github_token' => ['group' => 'source', 'label' => '采集触发 Token', 'desc' => '需要 actions:write 权限，用于后台一键触发云端采集', 'kind' => 'secret', 'def' => ''],
         'repo_timeout' => ['group' => 'source', 'label' => '拉取超时（秒）', 'desc' => '跨境拉取慢就调大', 'kind' => 'int', 'def' => '120'],
+        // ---- 封面刮削（TMDB） ----
+        'poster_enabled' => ['group' => 'poster', 'label' => '启用封面刮削', 'desc' => '关闭后全部资源用首字色块封面',
+            'kind' => 'select', 'def' => '0', 'options' => ['0' => '关闭', '1' => '开启']],
+        'poster_tmdb_key' => ['group' => 'poster', 'label' => 'TMDB API Key', 'desc' => '在 themoviedb.org → 设置 → API 免费申请',
+            'kind' => 'secret', 'def' => ''],
+        'poster_lang' => ['group' => 'poster', 'label' => '海报语言', 'desc' => 'zh-CN 优先中文海报，en-US 英文',
+            'kind' => 'text', 'def' => 'zh-CN'],
+        'poster_min_score' => ['group' => 'poster', 'label' => '匹配最低分', 'desc' => '100=标题必须完全一致；80=允许前后缀差异。调低会增加张冠李戴风险',
+            'kind' => 'int', 'def' => '90'],
+        'poster_localize' => ['group' => 'poster', 'label' => '下载海报到本地', 'desc' => '开启后存 storage/posters，站点不再依赖 TMDB CDN',
+            'kind' => 'select', 'def' => '0', 'options' => ['0' => '直连 CDN', '1' => '存本地']],
+        'poster_interval' => ['group' => 'poster', 'label' => '刮削间隔（秒）', 'desc' => '批量刮削时每条之间等待，避免触发 TMDB 限流',
+            'kind' => 'int', 'def' => '1'],
     ];
 }
 
@@ -62,6 +75,7 @@ const CFG_GROUPS = [
     'review' => '审核',
     'search' => '搜索与展示',
     'promo'  => '拉新',
+    'poster' => '封面',
     'source' => '数据源',
 ];
 
