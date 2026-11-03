@@ -108,22 +108,30 @@ def channel_depth(meta: dict, st: dict, default: int) -> int:
     """按频道产出率决定回溯深度：`# deep=N` 显式指定优先，其次看历史产出率。
 
     产出率 = 累计入库链接 / 累计扫描消息。高产号给 1500-2000 条，纯引流号只给 120 条。
+
+    **default == 0 表示本次是「纯追新」**，此时必须返回 0、不能被 meta 里的 deep 覆盖。
+    踩过的坑：channels.txt 里几十个频道写着 `deep=2000`，于是每 20 分钟的追新任务实际上
+    一直在往历史翻——`last_id` 永远不推进，新消息一条都进不来，库里所有频道都停在
+    采集当天。表现是「Actions 绿的、但数据不动」。
     """
-    if meta.get("deep"):
-        return int(meta["deep"])
-    if not default:
+    if default <= 0:
         return 0
+    if meta.get("deep"):
+        # 配置里写再大也夹到 1800，避免单个频道吃掉整个任务的时间预算
+        return min(int(meta["deep"]), 1800)
     scanned = int(st.get("scanned") or 0)
     links = int(st.get("links") or 0)
     if scanned < 50:
         return default
     rate = links * 100.0 / scanned
+    # 上限从 2500 降到 1800：29 个频道 × 2500 条会吃掉 20 分钟以上，
+    # 与每 20 分钟的追新任务抢 concurrency，容易连环排队
     if rate >= 60:
-        return max(default, 2500)
+        return max(default, 1800)
     if rate >= 40:
-        return max(default, 2000)
-    if rate >= 30:
         return max(default, 1500)
+    if rate >= 30:
+        return max(default, 1200)
     if rate >= 15:
         return max(default, 800)
     if rate >= 5:
@@ -148,14 +156,17 @@ async def run(args) -> int:
         print("缺少 TG_API_ID / TG_API_HASH / TG_SESSION（先跑 tools/tg_login.py）", file=sys.stderr)
         return 2
 
-    if args.channels:
-        channels = [(c, {}) for c in (tg.norm_channel(x) for x in args.channels.split(",")) if c]
+    explicit = [c for c in (tg.norm_channel(x) for x in args.channels.split(",")) if c] if args.channels else []
+    if explicit:
+        # 命令行点名了频道就只听命令行的，不再叠加 extra-file
+        # （否则 --channels a,b 实际会跑 a,b + 全部 mtproto 专用号，排查时容易误判）
+        channels = [(c, {}) for c in explicit]
     else:
         channels = tg.load_channel_config(ROOT / "collector" / "channels.txt")
-    if args.extra_file:
-        extra = Path(args.extra_file)
-        if extra.exists():
-            channels += tg.load_channel_config(extra)
+        if args.extra_file:
+            extra = Path(args.extra_file)
+            if extra.exists():
+                channels += tg.load_channel_config(extra)
     # 同一个频道出现两次时保留带 meta 的那份
     merged: dict[str, dict] = {}
     for name, meta in channels:
@@ -210,7 +221,9 @@ async def run(args) -> int:
             # 两种模式：
             #   --deep N  → 从游标往历史深处翻（MTProto 独有的价值）
             #   默认      → 从水位往上取新消息
-            kwargs = {"limit": depth or args.limit or None, "reverse": False}
+            # 追新时给个上限：水位落后几千条时逐次追上，避免单次任务超时
+            inc_limit = args.limit or 800
+            kwargs = {"limit": depth or inc_limit, "reverse": False}
             if depth:
                 cursor = st.get("backfill_before") or last_id
                 if cursor:

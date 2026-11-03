@@ -1,26 +1,26 @@
 # 正式采集清单。每行：频道名 + 可选行尾注释
-#   deep=2000   回溯深度（MTProto 深挖用，不写则按历史产出率自动定：产出高给 1500，引流号给 120）
+#   deep=1800   回溯深度（MTProto 深挖用，不写则按历史产出率自动定：产出高给 1500，引流号给 120）
 # 探针：python tools/probe_channels.py --file <清单> --proxy ...
 # 发现：python tools/auto_expand.py --pages 3
 
 # --- 首批（netdisk-spider 清单 + 自己发现）---
-freekecheng        # 基础课大号，产出稳定  deep=1500
+freekecheng        # 基础课大号，产出稳定  deep=1200
 PanjClub           # 混合影视  deep=1200
 Quark_Movies
 yunpanbaidu
 QuarkShare
 quarkshare
 kuakeshare         # 低产
-yunpanNB           # 高产影视  deep=2000
-leoziyuan          # MTProto 实测最能出货（106 条/1500 消息）  deep=2000
+yunpanNB           # 高产影视  deep=1800
+leoziyuan          # MTProto 实测最能出货（106 条/1500 消息）  deep=1800
 yunpan139
-yunpanx            # 高产  deep=1500
+yunpanx            # 高产  deep=1200
 quarkdj
 fuliziyuan
 shareAliyun
 yunpanxunlei
 yunpanuc
-XiangxiuNBB        # 实测 55 条/百条消息  deep=2000
+XiangxiuNBB        # 实测 55 条/百条消息  deep=1800
 
 # --- 2026-11-02 从互推里挖出、探针验证有效 ---
 okpojie
