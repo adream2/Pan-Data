@@ -81,7 +81,8 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
     <?php foreach ($facets['types'] as $t):
         $tv = (string) $t['type']; ?>
       <?= ui_pill(array_filter(['q' => $q, 'provider' => $provider, 'type' => $tv], fn($v) => $v !== ''),
-                  ui_type_name($tv), $type === $tv, $q === '' ? (int) $t['c'] : 0) ?>
+                  ui_type_name($tv), $type === $tv, $q === '' ? (int) $t['c'] : 0,
+                  '', '', ui_type_href($tv, $q, $provider)) ?>
     <?php endforeach; ?>
   </nav>
 

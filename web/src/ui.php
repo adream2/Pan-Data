@@ -239,15 +239,36 @@ function ui_is_today(?string $iso): bool
 }
 
 /** 筛选胶囊。query 传数组，URL 在这里统一拼装并转义，避免调用处二次转义 */
-function ui_pill(array $query, string $label, bool $active, int $count = 0, string $dotColor = '', string $extraClass = ''): string
+function ui_pill(array $query, string $label, bool $active, int $count = 0, string $dotColor = '', string $extraClass = '', string $hrefOverride = ''): string
 {
     $cls = ($active ? 'pill pill-active' : 'pill') . ($extraClass !== '' ? ' ' . $extraClass : '');
     $badge = $count > 0 ? '<span class="pill-count">' . number_format($count) . '</span>' : '';
     $dot = $dotColor !== ''
         ? '<span class="dot shrink-0" style="background:' . e($dotColor) . '"></span>'
         : '';
-    $href = '/search' . ($query !== [] ? '?' . http_build_query($query) : '');
+    $href = $hrefOverride !== ''
+        ? $hrefOverride
+        : '/search' . ($query !== [] ? '?' . http_build_query($query) : '');
     return '<a class="' . $cls . '" href="' . e($href) . '">' . $dot . e($label) . $badge . '</a>';
+}
+
+/**
+ * 类型胶囊该指向哪。
+ *
+ * 没有搜索词、没有平台筛选时，直接指向分类落地页（/course、/game …）——
+ * 那是会被收录的 index 页，有说明段和 FAQ；
+ * 指向 /search?type=course 只会落到 noindex 页，用户看不到分类介绍，权重也传不过去。
+ */
+function ui_type_href(string $type, string $q = '', string $provider = ''): string
+{
+    if ($q === '' && $provider === '' && function_exists('seo_landing_slug_for_type')) {
+        $slug = seo_landing_slug_for_type($type);
+        if ($slug !== null) {
+            return '/' . $slug;
+        }
+    }
+    $qs = http_build_query(array_filter(['q' => $q, 'type' => $type, 'provider' => $provider]));
+    return '/search' . ($qs !== '' ? '?' . $qs : '');
 }
 
 /** 平台品牌色（用于胶囊圆点） */
