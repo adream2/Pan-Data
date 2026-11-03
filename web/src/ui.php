@@ -47,23 +47,105 @@ function ui_type_name(string $t): string
 }
 
 /**
- * 标题清洗：频道文案经常把链接、提取码写进标题
- * （例：「《吞噬星空》2026 更至248集 链接：https://pan.quark.cn/s/xxx」）。
- * 只去掉尾巴上的链接段，不动前面对用户有用的信息。
+ * 标题清洗：频道文案常把链接、推广话术写进标题，直接展示会污染页面标题与结构化数据。
+ *
+ * 真实样本（ai短剧 频道固定模板）：
+ *   【ai短剧】假面热恋（191集 / 简介：2026-11-03更新短剧！ 和谐失效看其他网盘 先转存-再观看-避免和谐失效
+ *   -> 【ai短剧】假面热恋（191集）
+ *
+ * 原则：只截掉「之后全是营销话术」的部分，保留标题本体。
  */
 function ui_clean_title(string $title): string
 {
     $t = trim($title);
+
     // 「链接：https://...」「地址: http://...」整段去掉
     $t = preg_replace('/\s*[（(【\[]?\s*(?:链接|地址|网盘|提取码|密码)\s*[:：]?\s*https?:\/\/\S+.*$/iu', '', $t) ?? $t;
     // 裸露的 URL 及其后内容
     $t = preg_replace('/\s*https?:\/\/\S+.*$/iu', '', $t) ?? $t;
     // 收尾残留的「链接：」「地址:」
     $t = preg_replace('/\s*[（(【\[]?\s*(?:链接|地址)\s*[:：]\s*$/iu', '', $t) ?? $t;
-    // 注意：不能用 trim() 去多字节标点
-    $t = preg_replace('/^[\s\x{3000}·|，,、\-_—]+/u', '', $t) ?? $t;
-    $t = preg_replace('/[\s\x{3000}·|，,、\-_—]+$/u', '', $t) ?? $t;
+
+    // 频道自带的分类前缀：「#电影 / 电影：生化危机」-> 「生化危机」
+    $t = preg_replace('/^#\S+\s*[\/|｜]\s*/u', '', $t) ?? $t;
+    $t = preg_replace('/^#\S+\s+/u', '', $t) ?? $t;
+    $t = preg_replace('/^(?:电影|电视剧|剧集|电视剧集|动漫|动画|综艺|纪录片|短剧|课程|教程|游戏|软件|音乐|电子书|有声书)\s*[:：]\s*/u', '', $t) ?? $t;
+
+    // 「/ 简介：」「| 描述:」之后基本全是推广，从分隔符起整段丢弃
+    $t = preg_replace('/\s*[\/|｜]\s*(?:简介|描述|介绍|说明)\s*[:：].*$/u', '', $t) ?? $t;
+    // 没有分隔符、直接「简介：...」的
+    $t = preg_replace('/\s*(?:简介|描述|介绍|说明)\s*[:：].*$/u', '', $t) ?? $t;
+
+    // 残留的推广短语（不截断整段，只抹掉这几个词，避免误伤标题里的正常词）
+    $promo = [
+        '/和谐失效[^\s，。]*/u', '/先转存[^\s，。]*/u', '/避免和谐[^\s，。]*/u',
+        '/建议转存[^\s，。]*/u', '/更多(?:资源|精彩)[^\s，。]*/u',
+        '/持续更新[^\s，。]*/u', '/每日更新[^\s，。]*/u',
+        '/关注(?:频道|公众号|我)[^\s，。]*/u',
+    ];
+    foreach ($promo as $p) {
+        $t = preg_replace($p, '', $t) ?? $t;
+    }
+
+    // 收尾标点
+    // 注意：不能用 trim() 去多字节标点，trim 按字节切会把「《」切坏
+    $t = preg_replace('/^[\s\x{3000}·|，,、\-_—\/]+/u', '', $t) ?? $t;
+    $t = preg_replace('/[\s\x{3000}·|，,、\-_—\/]+$/u', '', $t) ?? $t;
+
+    // 截断后可能留下没闭合的括号（「（191集 」），补上才不会像渲染坏了
+    $t = preg_replace('/[（(]\s*([^（）()]*) \s*[）)]/u', '（$1）', $t) ?? $t;
+    $pairs = ['（' => '）', '(' => ')', '【' => '】', '《' => '》', '[' => ']'];
+    foreach ($pairs as $open => $close) {
+        $diff = mb_substr_count($t, $open) - mb_substr_count($t, $close);
+        if ($diff > 0) {
+            $t .= str_repeat($close, $diff);
+        }
+    }
+    // 补完括号后再去一次尾部空白
+    $t = rtrim($t);
+
     return $t !== '' ? $t : trim($title);
+}
+
+/**
+ * 简介清洗：去掉频道塞在简介里的推广话术，保留真正的剧情/内容说明。
+ * 不清空 —— 如果去掉后没剩东西就退回原文，宁可脏一点也不显示空。
+ */
+function ui_clean_desc(string $desc): string
+{
+    $t = trim($desc);
+    if ($t === '') {
+        return '';
+    }
+    // 日期型更新播报：「2026-11-03更新短剧！」
+    $t = preg_replace('/\d{4}-\d{2}-\d{2}\s*(?:更新|发布)[^！!。，,\s]*[！!。]?/u', '', $t) ?? $t;
+    $promo = [
+        '/和谐失效[^\s，。！]*[，。！]?/u',
+        '/看其他网盘[^\s，。！]*[，。！]?/u',
+        '/先转存[^\s，。！]*[，。！]?/u',
+        '/避免和谐[^\s，。！]*[，。！]?/u',
+        '/建议转存[^\s，。！]*[，。！]?/u',
+        '/更多(?:资源|精彩)[^\s，。！]*[，。！]?/u',
+        '/持续更新[^\s，。！]*[，。！]?/u',
+        '/每日更新[^\s，。！]*[，。！]?/u',
+        '/关注(?:频道|公众号|我)[^\s，。！]*[，。！]?/u',
+        '/[「『]?公众号[」』]?[^\s，。！]*/u',
+    ];
+    foreach ($promo as $p) {
+        $t = preg_replace($p, '', $t) ?? $t;
+    }
+    $t = preg_replace('/\s{2,}/u', ' ', $t) ?? $t;
+    $t = trim($t, " 	
+
+");
+    $t = preg_replace('/^[\s，,。、·\-_—]+/u', '', $t) ?? $t;
+
+    // 清完什么都不剩 → 说明这段简介本来就是纯推广，直接不显示，
+    // 比把「和谐失效看其他网盘」再贴回去好
+    if (mb_strlen(preg_replace('/[^\p{Han}\p{L}\p{N}]/u', '', $t) ?? '') < 4) {
+        return '';
+    }
+    return $t;
 }
 
 /** 关键词高亮：先在原文上定位，再逐段转义，避免二次转义与标签注入 */
@@ -173,16 +255,21 @@ function ui_provider_color(string $p): string
     return UI_PROVIDERS[$p][2][0] ?? '#94a3b8';
 }
 
-/** 分页条 */
-function ui_pager(int $page, int $pages, array $query): string
+/** 分页条。$base 允许分类落地页（/movie 等）复用同一套分页组件 */
+function ui_pager(int $page, int $pages, array $query, string $base = '/search'): string
 {
     if ($pages <= 1) {
         return '';
     }
-    $make = function (int $p, string $label, bool $active = false) use ($query): string {
+    $make = function (int $p, string $label, bool $active = false) use ($query, $base): string {
         $query['page'] = $p;
         $cls = $active ? 'pager-link pager-active' : 'pager-link';
-        return '<a class="' . $cls . '" href="/search?' . e(http_build_query($query)) . '">' . $label . '</a>';
+        $href = $base . '?' . http_build_query($query);
+        // 第 1 页用裸 URL，避免 /movie?page=1 与 /movie 两个地址争同一份权重
+        if ($p === 1 && count($query) === 1) {
+            $href = $base;
+        }
+        return '<a class="' . $cls . '" href="' . e($href) . '">' . $label . '</a>';
     };
     $out = '<nav class="mt-6 flex flex-wrap items-center justify-center gap-1.5" aria-label="分页">';
     if ($page > 1) {

@@ -208,6 +208,60 @@ return [
 ];
 ```
 
+## SEO
+
+### URL 结构
+
+| 路径 | 内容 | 索引策略 |
+|---|---|---|
+| `/` | 首页 | index |
+| `/movie` `/duanju` `/course` `/ebook` `/software` `/music` | 分类落地页（带独立的 H1、说明段、FAQ） | index，`?page=N` 各自 self-canonical |
+| `/s/{id}` | 资源详情 | index，带 WebPage + BreadcrumbList |
+| `/updates` | 追更日历 | index（`?days=30` 等参数页 noindex） |
+| `/search` | 全部资源 | index，第 1 页 canonical 指 `/`（与首页同内容） |
+| `/search?q=…` | 搜索结果 | **noindex, follow**（默认，可在设置里改） |
+| `/search?type=&sort=` | 筛选组合 | noindex（避免几十万个组合被索引） |
+| `/sitemap.xml` | sitemap 索引 | — |
+| `/robots.txt` | 动态生成，域名跟着设置走 | — |
+
+**为什么搜索词页默认 noindex**：中文站一旦放开，搜索引擎会爬进几百上千个 `?q=` 变体，索引爆掉、正文重复、权重稀释，是搜索站最典型的自伤。分类落地页已经承担了「让人搜到」的职责。
+
+`/detail?id=xxx` 会 **301** 到 `/s/xxx`，一个内容只留一个地址。
+
+**noindex 的页面不输出 canonical**——自己声明「我是正版」又声明「别收录」是矛盾信号，Google 会以 noindex 为准，不如干脆不给。
+
+### 结构化数据
+
+只标真实存在的类型，不猜：
+
+| 页面 | 类型 |
+|---|---|
+| 全站 | `WebSite` + `SearchAction`（sitelinks 搜索框） |
+| 分类页 | `CollectionPage` + `ItemList` + `FAQPage` |
+| 详情页 | `WebPage` + `BreadcrumbList` |
+
+**详情页故意不标 `Movie` / `Dataset`**：我们不是内容发布者，只是链接索引。乱标 rich result 会被判垃圾结构化数据，比不标更糟。
+
+### sitemap
+
+按 5000 条分片，`/sitemap.xml` 是索引：
+
+```
+/sitemap-core.xml     首页 + 6 个分类页 + 追更（8 条）
+/sitemap-res-1..3.xml 详情页，每片 5000 条
+```
+
+详情分片只输出 `loc` + `lastmod`（Google 早已忽略 `changefreq`/`priority`，去掉省 30% 体积）。
+超出范围的分片号返回空 `<urlset>` 而不是 404——404 的 sitemap 会让爬虫更快放弃。
+
+### 必须先做的一步
+
+后台 → 设置 → 外观 → **站点完整地址** 填 `https://你的域名`（带协议、不带结尾斜杠）。
+
+留空会按请求推断：能从 `Host` 头拿到域名，但如果前面有 CDN / 反代，sitemap 与 canonical 里可能出现内网地址。
+
+填好后访问 `/sitemap.xml` 确认域名正确，再提交到 Google Search Console / Bing Webmaster。
+
 ## 生产部署（Nginx + PHP-FPM）
 
 ```nginx
@@ -217,19 +271,43 @@ server {
     root /srv/pansou/web/public;
     index index.php;
 
+    # 动态 robots 与 sitemap（public 下没有这两个实体文件）
+    location = /robots.txt            { rewrite ^ /robots.php last; }
+    location = /sitemap.xml           { rewrite ^ /sitemap.php?kind=index last; }
+    location = /sitemap-core.xml      { rewrite ^ /sitemap.php?kind=core last; }
+    location ~ ^/sitemap-res-(\d+)\.xml$ { rewrite ^ /sitemap.php?kind=res&n=$1 last; }
+
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
+
     location ~ \.php$ {
         include fastcgi_params;
         fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_read_timeout 300;
     }
+
+    # 数据库、配置、缓存一律不可下载
     location ~* ^/(storage|src)/ { deny all; }
+    location ~* \.(sqlite|sqlite-wal|sqlite-shm)$ { deny all; }
+
+    gzip on;
+    gzip_types text/html text/css application/javascript application/xml application/json;
+    gzip_min_length 1024;
 }
 ```
 
-目录权限：`storage/` 需要 web 用户可写（SQLite + 限流文件）。
+Apache 用户用 `public/.htaccess`（已写好同样的规则，需要 `mod_rewrite`）。
+
+目录权限：`storage/` 需要 web 用户可写（SQLite + 限流文件）；`storage/app.sqlite` 建议 `chmod 600`——里面有网盘账号 Cookie。
+
+定时任务：
+
+```cron
+*/30 * * * *  php /srv/pansou/web/bin/sync.php hot
+5    4 * * *  php /srv/pansou/web/bin/sync.php shard 2026-11
+```
 
 ## 界面（照搬 urldb 的视觉语言）
 

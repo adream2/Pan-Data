@@ -239,6 +239,12 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
         $where[] = 'r.type = :type';
         $params[':type'] = (string) $f['type'];
     }
+    // 短剧：库里没有独立的 type，靠标题/简介里自带的「短剧」标记筛。
+    // 同时排掉「短剧更新目录」这类索引帖——它不是资源，只是一堆链接的目录。
+    if (!empty($f['duanju'])) {
+        $where[] = "(r.title LIKE '%短剧%' OR r.core_title LIKE '%短剧%' OR COALESCE(r.desc, '') LIKE '%短剧%')";
+        $where[] = "r.title NOT LIKE '%目录%'";
+    }
     if (!empty($f['provider'])) {
         $where[] = 'r.provider = :provider';
         $params[':provider'] = (string) $f['provider'];
@@ -307,12 +313,34 @@ function repo_stats(): array
     return $out;
 }
 
-function repo_facets(): array
+/**
+ * 筛选项计数。
+ *
+ * $base 是当前页面的固定筛选（分类页的 type、短剧页的 duanju 条件）。
+ * types 始终给全局数（点某个类型是跳去别的分类页，全局数才对）；
+ * providers 按 $base 过滤 —— 否则在 /movie 页会显示「全部平台 12,417」，
+ * 而列表只有 5,718 条，用户会以为筛选坏了。
+ */
+function repo_facets(array $base = []): array
 {
+    $where = ['hidden = 0'];
+    $params = [];
+    if (($base['type'] ?? '') !== '') {
+        $where[] = 'type = ?';
+        $params[] = (string) $base['type'];
+    }
+    if (!empty($base['duanju'])) {
+        $where[] = "(title LIKE '%短剧%' OR core_title LIKE '%短剧%' OR COALESCE(desc, '') LIKE '%短剧%')";
+        $where[] = "title NOT LIKE '%目录%'";
+    }
+    $whereSql = implode(' AND ', $where);
+    $stmt = db()->prepare("SELECT provider, COUNT(*) c FROM resources WHERE {$whereSql} GROUP BY provider ORDER BY c DESC");
+    $stmt->execute($params);
+
     return [
         'types'     => db()->query("SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type
         ORDER BY CASE type WHEN 'other' THEN 1 ELSE 0 END, c DESC")->fetchAll(),
-        'providers' => db()->query('SELECT provider, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY provider ORDER BY c DESC')->fetchAll(),
+        'providers' => $stmt->fetchAll(),
         'years'     => db()->query('SELECT year, COUNT(*) c FROM resources WHERE hidden = 0 AND year IS NOT NULL GROUP BY year ORDER BY year DESC LIMIT 12')->fetchAll(),
     ];
 }

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../src/user.php';
 require_once __DIR__ . '/../src/settings.php';
 require_once __DIR__ . '/../src/ui.php';
 require_once __DIR__ . '/../src/promo.php';
+require_once __DIR__ . '/../src/seo.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -30,18 +31,105 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '')
     } else {
         flash('举报太频繁，稍后再试', 'err');
     }
-    redirect('/detail?id=' . urlencode($rid));
+    redirect(seo_detail_path($rid));
 }
 
-// 路由：支持 /search 这种伪静态，也支持 ?r=search
+// 路由：优先用路径（/movie、/s/xxx），其次 ?r= 兼容旧链接
 $path = trim((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $path = preg_replace('#^index\.php$#', '', $path) ?? '';
-$route = (string) ($_GET['r'] ?? ($path === '' ? 'home' : $path));
-$route = preg_replace('#[^a-z_]#', '', $route) ?: 'home';
+$segments = $path === '' ? [] : explode('/', $path);
+$seg0 = (string) ($segments[0] ?? '');
+
+// /s/{id} -> 详情（SEO 友好路径）
+$pathId = '';
+if ($seg0 === 's' && isset($segments[1]) && $segments[1] !== '') {
+    $pathId = (string) $segments[1];
+}
+
+// /movie、/duanju 等分类落地页
+$landingSlug = seo_landing($seg0) !== null ? $seg0 : '';
+
+if ($pathId !== '') {
+    $route = 'detail';
+    $_GET['id'] = $pathId;
+} elseif ($landingSlug !== '') {
+    $route = 'landing';
+} else {
+    $route = (string) ($_GET['r'] ?? ($seg0 === '' ? 'home' : $seg0));
+    $route = preg_replace('#[^a-z_]#', '', $route) ?: 'home';
+}
+
+// 未知路径一律 404。否则 /任意字符串 都会返回 200 + 首页内容，
+// 等于给搜索引擎敞开无限 URL（软 404 是最典型的收录陷阱）
+$knownRoutes = ['home', 'search', 'detail', 'submit', 'updates', 'api_search', 'landing', 'notfound'];
+if (!in_array($route, $knownRoutes, true)) {
+    http_response_code(404);
+    $route = 'notfound';
+}
+
+// 旧详情链接 301 到 /s/{id}：同一内容只有一个 URL，避免权重分散
+if ($route === 'detail' && $pathId === '' && ($rid = (string) ($_GET['id'] ?? '')) !== '') {
+    $qs = array_filter(['page' => $_GET['page'] ?? '']);
+    if ($qs === []) {
+        header('Location: ' . seo_detail_path($rid), true, 301);
+        exit;
+    }
+}
 
 $siteName = setting('site_name', (string) cfg('site_name'));
 
 switch ($route) {
+    case 'notfound':
+        $content = '<div class="py-24 text-center">'
+            . '<p class="text-3xl font-semibold text-gray-300">404</p>'
+            . '<p class="mt-3 text-sm text-gray-500">这个页面不存在，或者资源已经下架了</p>'
+            . '<div class="mt-6 flex flex-wrap items-center justify-center gap-2">'
+            . '<a class="btn-primary inline-flex" href="/">回首页</a>'
+            . '<a class="btn-soft inline-flex" href="/search">浏览全部资源</a></div></div>';
+        $title = '404 页面不存在 - ' . $siteName;
+        $description = '页面不存在。';
+        break;
+
+    case 'landing':
+        // 分类落地页：/movie /duanju /course /ebook /software /music
+        $spec = seo_landing($landingSlug);
+        if ($spec === null) {
+            http_response_code(404);
+            $content = '<div class="py-24 text-center"><p class="text-sm text-gray-500">页面不存在</p>'
+                . '<a class="btn-primary mt-5 inline-flex" href="/">回首页</a></div>';
+            $title = '404 - ' . $siteName;
+            $description = '页面不存在。';
+            $route = 'notfound';
+            break;
+        }
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $filters = $spec['filter'];
+        if (cfg_get('show_invalid') !== '1') {
+            $filters['hide_invalid'] = true;
+        }
+        if (cfg_get('show_unchecked') !== '1') {
+            $filters['only_valid'] = true;
+        }
+        $res = repo_search($filters, $page, cfg_get_int('search_page_size') ?: 20);
+        $facets = repo_facets((array) $spec['filter']);
+        $stats = repo_stats();
+        $content = render_view('list', [
+            'q'        => '',
+            'type'     => (string) ($spec['filter']['type'] ?? ''),
+            'provider' => '',
+            'res'      => $res,
+            'facets'   => $facets,
+            'stats'    => $stats,
+            'isHome'   => false,
+            'hotWords' => [],
+            'landing'  => $spec,
+            'basePath' => '/' . $landingSlug,
+            'rootPath' => false,
+        ]);
+        $title = $spec['title'] . ($page > 1 ? ' - 第 ' . $page . ' 页' : '') . ' - ' . $siteName;
+        $description = $spec['desc'];
+        break;
+
     case 'updates':
         $days = (int) ($_GET['days'] ?? 7);
         if (!in_array($days, [7, 14, 30], true)) {
@@ -54,7 +142,8 @@ switch ($route) {
             'days' => $days,
             'totalToday' => $totalToday,
         ]);
-        $title = '追更日历 - ' . $siteName;
+        $title = '追更日历 - 最近更新的剧集 - ' . $siteName;
+        $description = '按日期查看最近 ' . $days . ' 天更新的剧集与短剧，标注最新集数、来源数与平台数，追剧不用逐个翻。';
         break;
 
     case 'detail':
@@ -65,6 +154,8 @@ switch ($route) {
                 . '<p class="text-sm text-gray-500">资源不存在或已下架</p>'
                 . '<a class="btn-primary mt-5 inline-flex" href="/">回首页</a></div>';
             $title = '404 - ' . $siteName;
+            $description = '资源不存在或已下架。';
+            $route = 'notfound';
             break;
         }
         click_track((string) $row['id']);
@@ -78,7 +169,25 @@ switch ($route) {
             'isFav'       => $isFav,
             'currentUser' => $currentUser,
         ]);
-        $title = $row['title'] . ' - ' . $siteName;
+        // 标题带上平台与「网盘」意图词：用户搜的是「xx 网盘」，不是「xx」
+        $cleanTitle = ui_clean_title((string) $row['title']);
+        // title 太长会被搜索引擎截断，控制在 34 字以内；h1 仍然展示完整标题
+        $titleShort = mb_strlen($cleanTitle) > 34 ? mb_substr($cleanTitle, 0, 34) . '…' : $cleanTitle;
+        $title = $titleShort . ' 网盘资源 - ' . ui_provider_name((string) $row['provider']) . ' - ' . $siteName;
+        $descParts = [$cleanTitle, ui_type_name((string) $row['type']) . '类网盘分享'];
+        if ((string) $row['year'] !== '') {
+            $descParts[] = $row['year'] . ' 年';
+        }
+        if ((int) ($row['episode'] ?? 0) > 0) {
+            $descParts[] = ((int) $row['complete'] === 1 ? '全' : '更新至 ') . (int) $row['episode'] . ' 集';
+        }
+        $descParts[] = '平台 ' . ui_provider_name((string) $row['provider']);
+        if (count($versions) > 1) {
+            $descParts[] = '共 ' . count($versions) . ' 个来源可切换';
+        }
+        $description = mb_substr(implode('，', $descParts), 0, 150)
+            . '。当前链接状态：' . (['valid' => '有效', 'invalid' => '已失效', 'unchecked' => '待巡检'][(string) $row['status']] ?? '未知') . '。';
+        $ogType = 'article';
         break;
 
     case 'submit':
@@ -179,13 +288,14 @@ switch ($route) {
             $filters['only_valid'] = true;
         }
         $res = repo_search($filters, $page, cfg_get_int('search_page_size') ?: 20);
-        $facets = repo_facets();
+        $facets = repo_facets(['type' => $type]);
         $stats = repo_stats();
         if ($q !== '') {
             search_track($q);
         }
 
         $isHome = ($q === '' && $type === '' && $provider === '');
+        // 首页与 /search 同内容：前者是入口，后者是「全部资源」页，用 H1 区分
         $content = render_view('list', [
             'q'        => $q,
             'type'     => $type,
@@ -195,11 +305,87 @@ switch ($route) {
             'stats'    => $stats,
             'isHome'   => $isHome,
             'hotWords' => $isHome ? top_searches(cfg_get_int('search_hot_words') ?: 7, 10) : [],
+            'landing'  => null,
+            'basePath' => '/search',
+            'rootPath' => ($segments === []),
         ]);
-        $title = $q !== ''
-            ? $q . ' - ' . $siteName
-            : $siteName . ' - ' . cfg('site_slogan');
+
+        $siteDesc = (string) setting('site_desc', (string) cfg('site_slogan'));
+        if ($q !== '') {
+            $title = $q . ' 网盘资源搜索 - ' . $res['total'] . ' 条结果 - ' . $siteName;
+            $description = '关于「' . $q . '」的网盘分享共 ' . number_format((int) $res['total'])
+                . ' 条，覆盖夸克、百度、阿里、迅雷、UC 等平台，支持按平台、类型与集数筛选。';
+        } elseif ($isHome) {
+            $title = $siteName . ' - ' . $siteDesc;
+            $description = $siteName . '：' . $siteDesc . '。已收录 ' . number_format((int) $stats['total'])
+                . ' 条资源，覆盖影视、短剧、课程、电子书、软件、音乐，自动巡检链接有效性。';
+        } else {
+            $titleText = ($type !== '' ? ui_type_name($type) : '全部')
+                . '资源' . ($provider !== '' ? ' · ' . ui_provider_name($provider) : '') . ' - ' . $siteName;
+            $title = $titleText;
+            $description = '浏览' . ($provider !== '' ? ui_provider_name($provider) . '网盘的' : '')
+                . ($type !== '' ? ui_type_name($type) : '全部') . '类资源，共 ' . number_format((int) $res['total'])
+                . ' 条，可按最新发布、来源最多、集数最多排序。';
+        }
         break;
 }
 
-view('layout', ['content' => $content, 'title' => (string) $title]);
+/* ---------------- SEO 元信息与结构化数据 ---------------- */
+$seoMeta = seo_meta_for([
+    'route'    => $route,
+    'slug'     => $landingSlug,
+    'id'       => (string) ($row['id'] ?? ($_GET['id'] ?? '')),
+    'q'        => (string) ($q ?? ''),
+    'type'     => (string) ($type ?? ''),
+    'provider' => (string) ($provider ?? ''),
+    'sort'     => (string) ($sort ?? 'new'),
+    'page'     => (int) ($page ?? ($_GET['page'] ?? 1)),
+    'days'     => (int) ($days ?? 7),
+]);
+
+$jsonld = [seo_jsonld_website()];
+$ogType = $ogType ?? 'website';
+
+if ($route === 'detail' && isset($row) && is_array($row)) {
+    // 详情页：WebPage + 面包屑。不标 Movie/Dataset —— 内容不是我们发布的，误标属于垃圾结构化数据
+    $crumb = [['name' => '首页', 'url' => seo_abs('/')]];
+    $landingForType = seo_landing_slug_for_type((string) $row['type']);
+    if ($landingForType !== null) {
+        $spec = seo_landing($landingForType);
+        $crumb[] = ['name' => (string) $spec['h1'], 'url' => seo_abs('/' . $landingForType)];
+    }
+    $crumb[] = ['name' => ui_clean_title((string) $row['title']), 'url' => seo_detail_url((string) $row['id'])];
+    $jsonld[] = seo_jsonld_breadcrumb($crumb);
+    $jsonld[] = [
+        '@context'      => 'https://schema.org',
+        '@type'         => 'WebPage',
+        'name'          => (string) $title,
+        'url'           => seo_detail_url((string) $row['id']),
+        'description'   => (string) $description,
+        'inLanguage'    => 'zh-CN',
+        'dateModified'  => (string) ($row['updated_at'] ?? $row['posted_at'] ?? gmdate('c')),
+        'isPartOf'      => ['@type' => 'WebSite', 'name' => $siteName, 'url' => seo_abs('/')],
+    ];
+} elseif ($route === 'landing' && isset($spec) && is_array($spec)) {
+    $jsonld[] = seo_jsonld_collection((string) $spec['h1'], (string) $spec['desc'],
+        seo_abs('/' . $landingSlug), (int) $res['total']);
+    $jsonld[] = seo_jsonld_itemlist((array) ($res['items'] ?? []), (string) $spec['h1']);
+    if (!empty($spec['faq'])) {
+        $jsonld[] = seo_jsonld_faq($spec['faq']);
+    }
+} elseif (isset($res['items'])) {
+    $listName = $q !== '' ? '「' . $q . '」的搜索结果' : '最新收录';
+    $jsonld[] = seo_jsonld_itemlist((array) $res['items'], $listName);
+}
+
+view('layout', [
+    'content'     => $content,
+    'title'       => (string) $title,
+    'description' => (string) ($description ?? ''),
+    'canonical'   => $seoMeta['canonical'],
+    'robots'      => $seoMeta['robots'],
+    'ogType'      => $ogType,
+    'jsonld'      => $jsonld,
+    // 首页让页头站点名当唯一 h1，其余页面交给正文
+    'siteHeading' => ($segments === []),
+]);

@@ -10,10 +10,22 @@ $href = (string) $row['share_url'];
 $pwd = (string) ($row['pwd'] ?? '');
 $allMirrors = $row['mirrors'] ?? [];
 $meta = ui_meta($row);
+$landingSlug = seo_landing_slug_for_type((string) $row['type']);
+$landingSpec = $landingSlug !== null ? seo_landing($landingSlug) : null;
 ?>
 <div class="mx-auto max-w-3xl px-2 sm:px-0">
 
-  <a href="javascript:history.back()" class="inline-flex items-center gap-1 text-xs text-gray-400 transition hover:text-gray-600">
+  <nav class="flex flex-wrap items-center gap-1 text-xs text-gray-500" aria-label="面包屑">
+    <a class="transition hover:text-gray-600" href="/">首页</a>
+    <?php if ($landingSpec !== null): ?>
+      <span aria-hidden="true">/</span>
+      <a class="transition hover:text-gray-600" href="/<?= e($landingSlug) ?>"><?= e((string) $landingSpec['h1']) ?></a>
+    <?php endif; ?>
+    <span aria-hidden="true">/</span>
+    <span class="truncate text-gray-400"><?= e(mb_substr(ui_clean_title((string) $row['title']), 0, 28)) ?></span>
+  </nav>
+
+  <a href="javascript:history.back()" class="mt-2 inline-flex items-center gap-1 text-xs text-gray-400 transition hover:text-gray-600">
     <svg class="size-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5l-5 5 5 5"/></svg>
     返回列表
   </a>
@@ -29,12 +41,6 @@ $meta = ui_meta($row);
           <span class="tag"><?= e(ui_provider_name((string) $row['provider'])) ?></span>
           <?php if ($meta !== ''): ?><span class="tag"><?= e($meta) ?></span><?php endif; ?>
           <?= ui_status((string) $row['status']) ?>
-          <?php
-          // 归一名只在明显更短时显示（否则和标题重复，纯噪音）
-          $coreTitle = trim((string) $row['core_title']);
-          if ($coreTitle !== '' && mb_strlen($coreTitle) < mb_strlen((string) $row['title']) * 0.75): ?>
-            <span class="tag-gray">归一名 <?= e($coreTitle) ?></span>
-          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -79,7 +85,7 @@ $meta = ui_meta($row);
           <?= number_format(click_count((string) $row['id'])) ?> 次浏览
         </span>
 
-        <form method="post" action="/detail?id=<?= e(urlencode((string) $row['id'])) ?>" class="ml-auto flex flex-wrap items-center gap-1.5">
+        <form method="post" action="<?= e(seo_detail_path((string) $row['id'])) ?>" class="ml-auto flex flex-wrap items-center gap-1.5">
           <input type="hidden" name="_csrf" value="<?= csrf_token() ?>">
           <input type="hidden" name="action" value="report">
           <input type="hidden" name="resource_id" value="<?= e((string) $row['id']) ?>">
@@ -144,7 +150,7 @@ $meta = ui_meta($row);
               <?php if ($same): ?>
                 <span class="text-[11px] text-cyan-600">当前</span>
               <?php else: ?>
-                <a class="text-blue-600 hover:underline" href="/detail?id=<?= e(urlencode((string) $v['id'])) ?>">查看</a>
+                <a class="text-blue-600 hover:underline" href="<?= e(seo_detail_path((string) $v['id'])) ?>">查看</a>
               <?php endif; ?>
             </td>
           </tr>
@@ -181,7 +187,7 @@ $meta = ui_meta($row);
               continue;
           } ?>
         <a class="flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm transition hover:shadow-md"
-           href="/detail?id=<?= e(urlencode((string) $r['id'])) ?>">
+           href="<?= e(seo_detail_path((string) $r['id'])) ?>">
           <span class="min-w-0 flex-1">
             <span class="clamp-1 block text-sm text-gray-800"><?= e((string) $r['title']) ?></span>
             <span class="mt-0.5 block text-[11px] text-gray-400"><?= e(ui_provider_name((string) $r['provider'])) ?> · <?= e(ui_rel_time($r['posted_at'])) ?></span>

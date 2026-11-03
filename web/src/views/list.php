@@ -13,7 +13,38 @@
 $baseQuery = array_filter(['q' => $q, 'type' => $type, 'provider' => $provider], fn($v) => $v !== '');
 $typesTotal = array_sum(array_column($facets['types'], 'c'));
 $provTotal = array_sum(array_column($facets['providers'], 'c'));
+
+// 分类落地页（/movie 等）：$landing 有值时分页走自己的路径，并渲染 H1 + 说明 + FAQ
+$landing = $landing ?? null;
+$basePath = $basePath ?? '/search';
+$pagerQuery = $landing !== null ? [] : $baseQuery;
 ?>
+
+<?php if ($landing !== null): ?>
+<section class="mx-auto mb-3 w-full max-w-3xl px-2 sm:px-0">
+  <h1 class="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"><?= e((string) $landing['h1']) ?></h1>
+  <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
+    <span>共 <span class="font-medium tabular-nums text-gray-700"><?= number_format((int) $res['total']) ?></span> 条</span>
+    <span class="text-gray-300">|</span>
+    <span><?= e(mb_substr((string) $landing['desc'], 0, 60)) ?></span>
+  </p>
+</section>
+<?php elseif (!($rootPath ?? false)): ?>
+<?php /* 首页的 h1 由页头站点名承担；搜索页 / 全部资源页在这里给唯一的 h1 */ ?>
+<section class="mx-auto mb-3 w-full max-w-3xl px-2 sm:px-0">
+  <h1 class="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl">
+    <?= $q !== '' ? '「' . e($q) . '」的搜索结果' : '全部资源' ?>
+  </h1>
+  <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
+    <span>共 <span class="font-medium tabular-nums text-gray-700"><?= number_format((int) $res['total']) ?></span> 条</span>
+    <?php if ($q !== ''): ?>
+      <span class="text-gray-300">|</span>
+      <span>覆盖 <?= count($facets['providers']) ?> 个网盘平台</span>
+    <?php endif; ?>
+  </p>
+</section>
+<?php endif; ?>
+
 <section class="mx-auto mb-4 w-full max-w-3xl px-2 sm:mb-8 sm:px-0" aria-label="搜索">
 
   <form action="/search" method="get" class="flex items-center gap-2" role="search">
@@ -115,7 +146,7 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
         <a class="text-blue-600 hover:underline" href="/submit">投稿</a> 一条
       </p>
     </div>
-  <?php else: ?>
+<?php else: ?>
 
     <!-- 移动端卡片流 -->
     <div class="space-y-2 p-2 sm:hidden">
@@ -128,8 +159,9 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
               <span class="tag-gray shrink-0"><?= e(ui_type_name((string) $row['type'])) ?></span>
               <h3 class="clamp-1 text-sm font-medium text-gray-900"><?= ui_hl(ui_clean_title((string) $row['title']), $q) ?></h3>
             </div>
-            <?php if ((string) $row['desc'] !== ''): ?>
-              <p class="clamp-2 mt-1 text-xs text-gray-500"><?= ui_hl((string) $row['desc'], $q) ?></p>
+            <?php $cleanDesc = ui_clean_desc((string) $row['desc']); ?>
+            <?php if ($cleanDesc !== ''): ?>
+              <p class="clamp-2 mt-1 text-xs text-gray-500"><?= ui_hl(ui_clean_desc((string) $row['desc']), $q) ?></p>
             <?php endif; ?>
             <div class="mt-1.5 flex items-center justify-between gap-2">
               <span class="text-[11px] text-gray-400"><?= e(ui_rel_time($row['posted_at'])) ?></span>
@@ -171,8 +203,9 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
                     <?php if ($new): ?><span class="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-700">今日新增</span><?php endif; ?>
                   </div>
                 <?php endif; ?>
-                <?php if ((string) $row['desc'] !== ''): ?>
-                  <div class="clamp-2 mt-1 text-xs text-gray-500"><?= ui_hl((string) $row['desc'], $q) ?></div>
+                <?php $cleanDesc = ui_clean_desc((string) $row['desc']); ?>
+            <?php if ($cleanDesc !== ''): ?>
+                  <div class="clamp-2 mt-1 text-xs text-gray-500"><?= ui_hl(ui_clean_desc((string) $row['desc']), $q) ?></div>
                 <?php endif; ?>
                 <?php if ((string) $row['channel'] !== ''): ?>
                   <div class="mt-1 inline-flex items-center gap-1 text-[11px] text-cyan-600">
@@ -195,7 +228,7 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
           <td>
             <?php if ((string) $row['pwd'] !== ''): ?>
               <span class="tag-pwd"><?= e((string) $row['pwd']) ?></span>
-            <?php else: ?>
+<?php else: ?>
               <span class="text-gray-300">—</span>
             <?php endif; ?>
           </td>
@@ -211,13 +244,39 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
 
 <div class="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-gray-500">
   <span>
-    <?= $q !== '' ? '「' . e($q) . '」' : '最新收录' ?>
+    <?= $q !== '' ? '「' . e($q) . '」' : ($landing !== null ? e((string) $landing['h1']) : '最新收录') ?>
     · 共 <span class="tabular-nums font-medium text-gray-700"><?= number_format((int) $res['total']) ?></span> 条
     <?= $res['pages'] > 1 ? '· 第 ' . (int) $res['page'] . ' / ' . (int) $res['pages'] . ' 页' : '' ?>
   </span>
-  <?php if ($q !== ''): ?>
-    <a class="text-blue-600 hover:underline" href="/search">清除搜索</a>
+  <?php if ($q !== '' || $landing !== null): ?>
+    <a class="text-blue-600 hover:underline" href="/search"><?= $landing !== null ? '看全部资源' : '清除搜索' ?></a>
   <?php endif; ?>
 </div>
 
-<?= ui_pager((int) $res['page'], (int) $res['pages'], $baseQuery) ?>
+<?= ui_pager((int) $res['page'], (int) $res['pages'], $pagerQuery, $basePath) ?>
+
+<?php if ($landing !== null): ?>
+<section class="mt-8 border-t border-gray-200 px-1 pt-6 text-sm leading-6 text-gray-600">
+  <h2 class="mb-2 text-sm font-semibold text-gray-800">关于<?= e((string) $landing['h1']) ?></h2>
+  <p><?= e((string) $landing['intro']) ?></p>
+
+  <?php if (!empty($landing['faq'])): ?>
+  <h2 class="mb-2 mt-6 text-sm font-semibold text-gray-800">常见问题</h2>
+  <dl class="divide-y divide-gray-100">
+    <?php foreach ($landing['faq'] as $f): ?>
+    <div class="py-3">
+      <dt class="text-[13px] font-medium text-gray-800"><?= e((string) $f['q']) ?></dt>
+      <dd class="mt-1 text-[13px] leading-6 text-gray-600"><?= e((string) $f['a']) ?></dd>
+    </div>
+    <?php endforeach; ?>
+  </dl>
+  <?php endif; ?>
+
+  <p class="mt-6 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-gray-500">
+    <?php foreach (seo_landings() as $s => $sp): ?>
+      <?php if ($s === $landing['slug']) continue; ?>
+      <a class="text-blue-600 hover:underline" href="/<?= e($s) ?>"><?= e((string) $sp['h1']) ?></a>
+    <?php endforeach; ?>
+  </p>
+</section>
+<?php endif; ?>

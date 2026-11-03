@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/user.php';
+require_once __DIR__ . '/../src/seo.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -97,7 +98,8 @@ if ($user === null) {
             ? '还没有账号？<a class="text-blue-600 hover:underline" href="/user?r=register">注册</a>'
             : '已有账号？<a class="text-blue-600 hover:underline" href="/user?r=login">登录</a>')
         . '</p></div></div>';
-    view('layout', ['content' => $body, 'title' => $title]);
+    view('layout', ['content' => $body, 'title' => $title,
+        'robots' => 'noindex, nofollow', 'description' => '用户中心', 'canonical' => seo_abs('/user')]);
     exit;
 }
 
@@ -215,4 +217,5 @@ $content = '<div class="mx-auto max-w-3xl pt-8">'
     . '<div class="mb-5 flex flex-wrap gap-1">' . $tabs . '</div>'
     . $panel . '</div>';
 
-view('layout', ['content' => $content, 'title' => $title]);
+view('layout', ['content' => $content, 'title' => $title,
+        'robots' => 'noindex, nofollow', 'description' => '用户中心', 'canonical' => seo_abs('/user')]);

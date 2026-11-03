@@ -14,6 +14,9 @@ function cfg_spec(): array
         'site_name' => ['group' => 'site', 'label' => '站点名称', 'desc' => '页头与标题栏显示', 'kind' => 'text', 'def' => '盘搜'],
         'site_desc' => ['group' => 'site', 'label' => '副标题', 'desc' => '页头 slogan', 'kind' => 'text', 'def' => 'Telegram 网盘资源聚合搜索'],
         'notice' => ['group' => 'site', 'label' => '站内公告', 'desc' => '留空不显示，支持纯文本', 'kind' => 'textarea', 'def' => ''],
+        'site_url' => ['group' => 'site', 'label' => '站点完整地址', 'desc' => 'SEO 用，必须带 https://，不要结尾斜杠；留空则按请求推断（sitemap 会漏域名）', 'kind' => 'text', 'def' => ''],
+        'seo_index_search' => ['group' => 'site', 'label' => '允许搜索引擎收录搜索页', 'desc' => '关则搜索参数页 noindex, follow；推荐关闭以免无限组合被索引', 'kind' => 'select',
+            'def' => '0', 'options' => ['0' => '不收录（推荐）', '1' => '收录']],
         // ---- 投稿 ----
         'submit_open' => ['group' => 'submit', 'label' => '开放投稿', 'desc' => '关闭后前台提示投稿暂闭', 'kind' => 'select',
             'def' => '1', 'options' => ['1' => '开启', '0' => '关闭']],

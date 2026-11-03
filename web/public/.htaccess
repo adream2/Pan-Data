@@ -1,0 +1,24 @@
+# Apache 部署用。Nginx 见 README 的「部署」章节
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # robots 与 sitemap 映射到动态脚本（域名要跟着设置里的「站点完整地址」走）
+    RewriteRule ^robots\.txt$ robots.php [L,QSA]
+    RewriteRule ^sitemap\.xml$ sitemap.php?kind=index [L,QSA]
+    RewriteRule ^sitemap-core\.xml$ sitemap.php?kind=core [L,QSA]
+    RewriteRule ^sitemap-res-([0-9]+)\.xml$ sitemap.php?kind=res&n=$1 [L,QSA]
+
+    # 真实存在的文件/目录直接给（CSS、上传的图）
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # 其余全部交给入口（/movie、/s/xxx 等）
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# 别让 SQLite 与配置被直接下载
+<FilesMatch "\.(sqlite|sqlite-wal|sqlite-shm)$">
+    Require all denied
+</FilesMatch>
