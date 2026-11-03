@@ -25,8 +25,9 @@ const UI_PROVIDERS = [
 const UI_TYPES = [
     'movie'    => '影视',
     'course'   => '课程',
-    'ebook'    => '电子书',
+    'game'     => '游戏',
     'software' => '软件',
+    'ebook'    => '电子书',
     'music'    => '音乐',
     'other'    => '其它',
 ];

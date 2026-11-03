@@ -18,10 +18,15 @@ import calendar
 import hashlib
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# 复用采集端的分类器，避免导出和采集两套规则各自漂移
+sys.path.insert(0, str(ROOT / "collector"))
+from fetch_tg import classify_type  # noqa: E402
 SRC = ROOT / "data" / "links.jsonl"
 OUT = ROOT / "data" / "resources.json"
 SHARD_DIR = ROOT / "data" / "shards"
@@ -89,7 +94,10 @@ def build_resource(row: dict, siblings: list[dict]) -> dict:
         "id": row.get("group_key") or row["id"],
         "title": best_title(row),
         "core_title": row.get("core_title") or "",
-        "type": row.get("rtype") or "other",
+        # 用当前规则重算，而不是直接信 links.jsonl 里的 rtype：
+        # 规则改过之后，几十万条历史数据不可能回头重采，
+        # 导出这一步是唯一能统一口径的地方。
+        "type": classify_type(best_title(row)),
         "year": row.get("year"),
         "season": row.get("season"),
         "episode": row.get("episode"),
