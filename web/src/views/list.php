@@ -99,10 +99,9 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
     <div class="space-y-2 p-2 sm:hidden">
       <?php foreach ($res['items'] as $row):
           $new = ui_is_today($row['posted_at']); ?>
-        <article class="flex gap-3 rounded-lg p-3 transition-colors <?= $new ? 'bg-cyan-50' : 'bg-gray-50' ?> active:bg-gray-100"
+        <article class="rounded-lg p-3 transition-colors <?= $new ? 'bg-cyan-50' : 'bg-gray-50' ?> active:bg-gray-100"
                  onclick="location.href='/detail?id=<?= e(urlencode((string) $row['id'])) ?>'">
-          <?= ui_cover($row, 64) ?>
-          <div class="min-w-0 flex-1">
+          <div class="min-w-0">
             <div class="flex items-center gap-1">
               <span class="tag-gray shrink-0"><?= e(ui_type_name((string) $row['type'])) ?></span>
               <h3 class="clamp-1 text-sm font-medium text-gray-900"><?= ui_hl((string) $row['title'], $q) ?></h3>
@@ -126,7 +125,6 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
     <table class="res-table hidden sm:table">
       <thead>
         <tr>
-          <th class="w-24">封面</th>
           <th>文件名</th>
           <th class="w-24">平台</th>
           <th class="w-24">提取码</th>
@@ -139,9 +137,6 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
           $href = '/detail?id=' . urlencode((string) $row['id']);
           $meta = ui_meta($row); ?>
         <tr class="<?= $new ? 'is-new' : '' ?>" onclick="location.href='<?= e($href) ?>'">
-          <td>
-            <div class="flex justify-center"><?= ui_cover($row, 80) ?></div>
-          </td>
           <td>
             <div class="flex items-start gap-2">
               <span class="tag-gray mt-0.5 shrink-0"><?= e(ui_type_name((string) $row['type'])) ?></span>

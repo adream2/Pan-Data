@@ -21,9 +21,8 @@ $meta = ui_meta($row);
   <article class="mt-3 overflow-hidden rounded-lg bg-white shadow-lg shadow-slate-900/10">
 
     <!-- 标题区 -->
-    <div class="flex items-start gap-4 border-b border-gray-100 p-5 sm:p-6">
-      <?= ui_cover($row, 64) ?>
-      <div class="min-w-0 flex-1">
+    <div class="border-b border-gray-100 p-5 sm:p-6">
+      <div class="min-w-0">
         <h1 class="break-words text-lg font-semibold leading-snug text-gray-900 sm:text-xl"><?= e((string) $row['title']) ?></h1>
         <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
           <span class="tag-gray"><?= e(ui_type_name((string) $row['type'])) ?></span>
@@ -143,7 +142,6 @@ $meta = ui_meta($row);
           } ?>
         <a class="flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm transition hover:shadow-md"
            href="/detail?id=<?= e(urlencode((string) $r['id'])) ?>">
-          <?= ui_cover($r, 44) ?>
           <span class="min-w-0 flex-1">
             <span class="clamp-1 block text-sm text-gray-800"><?= e((string) $r['title']) ?></span>
             <span class="mt-0.5 block text-[11px] text-gray-400"><?= e(ui_provider_name((string) $r['provider'])) ?> · <?= e(ui_rel_time($r['posted_at'])) ?></span>
