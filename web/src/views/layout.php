@@ -32,6 +32,10 @@
         <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="6"/><path d="m13.5 13.5 3.5 3.5"/></svg>
         全部资源
       </a>
+      <a class="header-btn" href="/updates" title="看最近更新的剧集">
+        <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        追更
+      </a>
       <a class="header-btn" href="/submit" title="投稿一个网盘链接">
         <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15V5m0 0-4 4m4-4 4 4"/></svg>
         投稿

@@ -202,7 +202,17 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
     $where = ['r.hidden = 0'];
     $params = [];
     $join = '';
-    $order = 'r.posted_at DESC';
+
+    // 排序：new=最新发布（默认）｜sources=来源最多｜episode=集数最多（追更）
+    $sort = (string) ($f['sort'] ?? 'new');
+    if (!in_array($sort, ['new', 'sources', 'episode'], true)) {
+        $sort = 'new';
+    }
+    $order = match ($sort) {
+        'sources' => 'r.sources DESC, r.posted_at DESC',
+        'episode' => 'r.episode IS NULL ASC, r.episode DESC, r.posted_at DESC',
+        default   => 'r.posted_at DESC',
+    };
 
     $kw = trim((string) ($f['q'] ?? ''));
     if ($kw !== '') {
@@ -212,7 +222,12 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
             $quoted = array_map(fn($t) => '"' . str_replace('"', '""', $t) . '"', $terms);
             $where[] = 'resources_fts MATCH :fts';
             $params[':fts'] = implode(' AND ', $quoted);
-            $order = 'bm25(resources_fts, 8.0, 4.0, 1.0) ASC, r.posted_at DESC';
+            // 默认按相关度；用户显式选了排序就以排序为主，相关度退为次级
+            $order = match ($sort) {
+                'sources' => 'r.sources DESC, bm25(resources_fts, 8.0, 4.0, 1.0) ASC',
+                'episode' => 'r.episode IS NULL ASC, r.episode DESC, bm25(resources_fts, 8.0, 4.0, 1.0) ASC',
+                default   => 'bm25(resources_fts, 8.0, 4.0, 1.0) ASC, r.posted_at DESC',
+            };
         } else {
             foreach ($terms as $i => $t) {
                 $where[] = "(r.title LIKE :lk{$i} OR r.core_title LIKE :lk{$i} OR r.desc LIKE :lk{$i})";
@@ -256,6 +271,7 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
         'page'  => $page,
         'pages' => max(1, (int) ceil($total / $per)),
         'per'   => $per,
+        'sort'  => $sort,
     ];
 }
 
@@ -299,4 +315,60 @@ function repo_facets(): array
         'providers' => db()->query('SELECT provider, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY provider ORDER BY c DESC')->fetchAll(),
         'years'     => db()->query('SELECT year, COUNT(*) c FROM resources WHERE hidden = 0 AND year IS NOT NULL GROUP BY year ORDER BY year DESC LIMIT 12')->fetchAll(),
     ];
+}
+
+/**
+ * 追更列表：按 core_title 聚合，取最近更新到第几集。
+ * 只统计近 N 天有动静、且带集数的影视资源。
+ *
+ * @return array<int, array{core_title:string,max_ep:int,last_at:string,versions:int,sources:int,platforms:int}>
+ */
+function repo_updates(int $days = 14, int $limit = 200): array
+{
+    $days = max(1, min($days, 90));
+    $limit = max(1, min($limit, 500));
+    $since = date('Y-m-d', strtotime('-' . $days . ' days'));
+    $sql = "SELECT core_title,
+                   MAX(COALESCE(episode, 0)) AS max_ep,
+                   MAX(posted_at) AS last_at,
+                   COUNT(*) AS versions,
+                   MAX(COALESCE(sources, 1)) AS sources,
+                   COUNT(DISTINCT provider) AS platforms
+            FROM resources
+            WHERE hidden = 0
+              AND type = 'movie'
+              AND core_title != ''
+              AND episode IS NOT NULL AND episode > 0
+              AND posted_at >= :since
+            GROUP BY core_title
+            ORDER BY last_at DESC
+            LIMIT " . $limit;
+    $stmt = db()->prepare($sql);
+    $stmt->execute([':since' => $since]);
+    return $stmt->fetchAll();
+}
+
+/** 今日有更新的剧集数（首页提示条用） */
+function repo_today_updates(): int
+{
+    return (int) db()->query("SELECT COUNT(DISTINCT core_title) FROM resources
+        WHERE hidden = 0 AND type = 'movie' AND core_title != ''
+          AND episode IS NOT NULL AND episode > 0
+          AND substr(posted_at, 1, 10) = date('now')")->fetchColumn();
+}
+
+/** 某部剧的全部来源版本，按集数倒序（详情页「同剧版本」用） */
+function repo_versions(string $coreTitle, int $limit = 12): array
+{
+    // 优先级与采集端 grouping.py 保持一致：链接有效 > 未巡检 > 失效，然后集数高、时间新
+    $stmt = db()->prepare("SELECT * FROM resources
+        WHERE hidden = 0 AND core_title = TRIM(?)
+        ORDER BY CASE status WHEN 'valid' THEN 0 WHEN 'unchecked' THEN 1 ELSE 2 END,
+                 COALESCE(episode, 0) DESC, posted_at DESC LIMIT " . max(1, min($limit, 30)));
+    $stmt->execute([$coreTitle]);
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$r) {
+        $r['mirrors'] = json_decode((string) $r['mirrors_json'], true) ?: [];
+    }
+    return $rows;
 }

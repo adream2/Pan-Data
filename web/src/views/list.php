@@ -70,8 +70,30 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
     </span>
   </div>
 
+  <?php
+  $sortNow = (string) ($_GET['sort'] ?? 'new');
+  $sortLink = function (string $key) use ($q, $type, $provider): string {
+      return '/search?' . http_build_query(array_filter(
+          ['q' => $q, 'type' => $type, 'provider' => $provider, 'sort' => $key === 'new' ? '' : $key],
+          fn($v) => $v !== ''
+      ));
+  };
+  ?>
+  <nav class="mt-4 flex flex-wrap items-center gap-1 border-t border-gray-200/70 px-1 pt-3 text-[11px] text-gray-500" aria-label="排序方式">
+    <span class="mr-1 text-gray-400">排序</span>
+    <?php foreach (['new' => '最新发布', 'sources' => '来源最多', 'episode' => '集数最多'] as $k => $label):
+        $on = $sortNow === $k; ?>
+      <a class="<?= $on ? 'font-medium text-blue-600 underline underline-offset-2' : 'rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-700' ?>"
+         href="<?= e($sortLink($k)) ?>"<?= $on ? ' aria-current="true"' : '' ?>><?= e($label) ?></a>
+    <?php endforeach; ?>
+    <a class="ml-auto inline-flex items-center gap-1 text-blue-600 hover:underline" href="/updates">
+      追更日历
+      <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 5 5 5-5 5"/></svg>
+    </a>
+  </nav>
+
   <?php if ($hotWords !== []): ?>
-  <div class="mt-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-gray-400">
+  <div class="mt-2 flex flex-wrap items-center gap-1.5 px-1 pb-1 text-[11px] text-gray-400">
     <span class="mr-1">大家在搜</span>
     <?php foreach ($hotWords as $h): ?>
       <a class="transition hover:text-blue-600" href="/search?q=<?= e(urlencode((string) $h['q'])) ?>"><?= e((string) $h['q']) ?></a>
@@ -104,7 +126,7 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
           <div class="min-w-0">
             <div class="flex items-center gap-1">
               <span class="tag-gray shrink-0"><?= e(ui_type_name((string) $row['type'])) ?></span>
-              <h3 class="clamp-1 text-sm font-medium text-gray-900"><?= ui_hl((string) $row['title'], $q) ?></h3>
+              <h3 class="clamp-1 text-sm font-medium text-gray-900"><?= ui_hl(ui_clean_title((string) $row['title']), $q) ?></h3>
             </div>
             <?php if ((string) $row['desc'] !== ''): ?>
               <p class="clamp-2 mt-1 text-xs text-gray-500"><?= ui_hl((string) $row['desc'], $q) ?></p>
@@ -142,7 +164,7 @@ $provTotal = array_sum(array_column($facets['providers'], 'c'));
               <span class="tag-gray mt-0.5 shrink-0"><?= e(ui_type_name((string) $row['type'])) ?></span>
               <div class="min-w-0 flex-1">
                 <a class="block break-words text-base font-medium text-gray-900 transition hover:text-blue-600"
-                   href="<?= e($href) ?>"><?= ui_hl((string) $row['title'], $q) ?></a>
+                   href="<?= e($href) ?>"><?= ui_hl(ui_clean_title((string) $row['title']), $q) ?></a>
                 <?php if ($meta !== ''): ?>
                   <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
                     <span class="tag"><?= e($meta) ?></span>

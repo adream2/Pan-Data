@@ -42,6 +42,21 @@ $route = preg_replace('#[^a-z_]#', '', $route) ?: 'home';
 $siteName = setting('site_name', (string) cfg('site_name'));
 
 switch ($route) {
+    case 'updates':
+        $days = (int) ($_GET['days'] ?? 7);
+        if (!in_array($days, [7, 14, 30], true)) {
+            $days = 7;
+        }
+        $rows = repo_updates($days, 500);
+        $totalToday = repo_today_updates();
+        $content = render_view('updates', [
+            'rows' => $rows,
+            'days' => $days,
+            'totalToday' => $totalToday,
+        ]);
+        $title = '追更日历 - ' . $siteName;
+        break;
+
     case 'detail':
         $row = repo_get((string) ($_GET['id'] ?? ''));
         if ($row === null) {
@@ -54,9 +69,11 @@ switch ($route) {
         }
         click_track((string) $row['id']);
         $isFav = $currentUser !== null && user_is_favorite((int) $currentUser['id'], (string) $row['id']);
+        $versions = repo_versions((string) $row['core_title'], 12);
         $related = repo_search(['q' => mb_substr((string) $row['core_title'], 0, 12)], 1, 7)['items'];
         $content = render_view('detail', [
             'row'         => $row,
+            'versions'    => $versions,
             'related'     => $related,
             'isFav'       => $isFav,
             'currentUser' => $currentUser,
@@ -153,7 +170,8 @@ switch ($route) {
         $provider = (string) ($_GET['provider'] ?? '');
         $page     = max(1, (int) ($_GET['page'] ?? 1));
 
-        $filters = ['q' => $q, 'type' => $type, 'provider' => $provider];
+        $sort = (string) ($_GET['sort'] ?? 'new');
+        $filters = ['q' => $q, 'type' => $type, 'provider' => $provider, 'sort' => $sort];
         if (cfg_get('show_invalid') !== '1') {
             $filters['hide_invalid'] = true;
         }

@@ -23,7 +23,7 @@ $meta = ui_meta($row);
     <!-- 标题区 -->
     <div class="border-b border-gray-100 p-5 sm:p-6">
       <div class="min-w-0">
-        <h1 class="break-words text-lg font-semibold leading-snug text-gray-900 sm:text-xl"><?= e((string) $row['title']) ?></h1>
+        <h1 class="break-words text-lg font-semibold leading-snug text-gray-900 sm:text-xl"><?= e(ui_clean_title((string) $row['title'])) ?></h1>
         <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
           <span class="tag-gray"><?= e(ui_type_name((string) $row['type'])) ?></span>
           <span class="tag"><?= e(ui_provider_name((string) $row['provider'])) ?></span>
@@ -113,6 +113,46 @@ $meta = ui_meta($row);
         <li class="px-4 py-3 text-[11px] text-gray-400">还有 <?= count($allMirrors) - 6 ?> 个来源未展开</li>
       <?php endif; ?>
     </ul>
+  </section>
+  <?php endif; ?>
+
+  <?php if (count($versions ?? []) > 1): ?>
+  <section class="mt-5">
+    <h2 class="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+      同剧其他来源 · <?= count($versions) ?> 个
+    </h2>
+    <div class="overflow-hidden rounded-lg bg-white shadow-sm">
+      <table class="w-full text-left">
+        <thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">
+          <tr><th class="px-4 py-2 font-medium">集数</th><th class="px-4 py-2 font-medium">平台</th>
+          <th class="px-4 py-2 font-medium">状态</th><th class="px-4 py-2 font-medium">时间</th>
+          <th class="px-4 py-2 font-medium"></th></tr>
+        </thead>
+        <tbody>
+        <?php foreach ($versions as $v):
+            $same = (string) $v['id'] === (string) $row['id']; ?>
+          <tr class="border-b border-gray-100 last:border-0 <?= $same ? 'bg-cyan-50/50' : 'hover:bg-gray-50' ?>">
+            <td class="px-4 py-2 text-xs">
+              <?php if (!empty($v['episode'])): ?>
+                <span class="tag"><?= !empty($v['complete']) ? '全' : '更至' ?> <?= (int) $v['episode'] ?> 集</span>
+              <?php else: ?><span class="text-gray-300">—</span><?php endif; ?>
+            </td>
+            <td class="px-4 py-2 text-xs text-gray-700"><?= e(ui_provider_name((string) $v['provider'])) ?></td>
+            <td class="px-4 py-2 text-xs"><?= ui_status((string) $v['status']) ?></td>
+            <td class="px-4 py-2 font-mono text-[11px] text-gray-400"><?= e(ui_rel_time($v['posted_at'])) ?></td>
+            <td class="px-4 py-2 text-right text-xs">
+              <?php if ($same): ?>
+                <span class="text-[11px] text-cyan-600">当前</span>
+              <?php else: ?>
+                <a class="text-blue-600 hover:underline" href="/detail?id=<?= e(urlencode((string) $v['id'])) ?>">查看</a>
+              <?php endif; ?>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-1.5 px-1 text-[11px] text-gray-400">同一部剧被多个频道转发时，这里列出各自的集数与来源</p>
   </section>
   <?php endif; ?>
 

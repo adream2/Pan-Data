@@ -46,6 +46,26 @@ function ui_type_name(string $t): string
     return UI_TYPES[$t] ?? '其它';
 }
 
+/**
+ * 标题清洗：频道文案经常把链接、提取码写进标题
+ * （例：「《吞噬星空》2026 更至248集 链接：https://pan.quark.cn/s/xxx」）。
+ * 只去掉尾巴上的链接段，不动前面对用户有用的信息。
+ */
+function ui_clean_title(string $title): string
+{
+    $t = trim($title);
+    // 「链接：https://...」「地址: http://...」整段去掉
+    $t = preg_replace('/\s*[（(【\[]?\s*(?:链接|地址|网盘|提取码|密码)\s*[:：]?\s*https?:\/\/\S+.*$/iu', '', $t) ?? $t;
+    // 裸露的 URL 及其后内容
+    $t = preg_replace('/\s*https?:\/\/\S+.*$/iu', '', $t) ?? $t;
+    // 收尾残留的「链接：」「地址:」
+    $t = preg_replace('/\s*[（(【\[]?\s*(?:链接|地址)\s*[:：]\s*$/iu', '', $t) ?? $t;
+    // 注意：不能用 trim() 去多字节标点
+    $t = preg_replace('/^[\s\x{3000}·|，,、\-_—]+/u', '', $t) ?? $t;
+    $t = preg_replace('/[\s\x{3000}·|，,、\-_—]+$/u', '', $t) ?? $t;
+    return $t !== '' ? $t : trim($title);
+}
+
 /** 关键词高亮：先在原文上定位，再逐段转义，避免二次转义与标签注入 */
 function ui_hl(string $text, string $kw = ''): string
 {
