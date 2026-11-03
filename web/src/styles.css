@@ -135,25 +135,12 @@
 
   /* ---------- 封面块：我们没有文件缩略图，用首字 + 平台色 ---------- */
   .cover {
-    @apply flex shrink-0 items-center justify-center rounded border border-gray-200
-           text-lg font-semibold text-white;
-  }
-
-  /* ---------- 封面（海报 or 首字色块） ---------- */
-  .cover-wrap {
-    @apply relative inline-flex shrink-0;
-  }
-  .cover-wrap .cover-img {
-    @apply size-full rounded border border-gray-200 object-cover;
-  }
-  .cover-wrap .cover-fallback {
-    @apply hidden;
-  }
-  .cover-wrap.is-broken .cover-img {
-    @apply hidden;
-  }
-  .cover-wrap.is-broken .cover-fallback {
-    @apply flex;
+    @apply flex shrink-0 items-center justify-center rounded text-lg font-semibold
+           text-white/95;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(15, 23, 42, 0.12);
+    letter-spacing: 0.01em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   }
 
   /* ---------- 标签 ---------- */

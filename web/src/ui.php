@@ -22,6 +22,16 @@ const UI_PROVIDERS = [
     'gdrive'   => ['谷歌', 'G', ['#fbbf24', '#16a34a']],
 ];
 
+/** 封面类型色：低饱和深色渐变，保证白字可读，同时四类之间能区分 */
+const UI_TYPE_COLORS = [
+    'movie'    => ['#1d4ed8', '#1e3a8a'],   // 蓝：影视
+    'course'   => ['#0891b2', '#155e75'],   // 青：课程
+    'ebook'    => ['#d97706', '#92400e'],   // 橙：电子书
+    'software' => ['#7c3aed', '#5b21b6'],   // 紫：软件
+    'music'    => ['#e11d48', '#9f1239'],   // 玫红：音乐
+    'other'    => ['#64748b', '#334155'],   // 石板灰：其它
+];
+
 const UI_TYPES = [
     'movie'    => '影视',
     'course'   => '课程',
@@ -74,28 +84,17 @@ function ui_hl(string $text, string $kw = ''): string
 }
 
 /** 封面：有刮削到的海报就用图片，否则回退到「平台色 + 首字」色块 */
+/**
+ * 封面：统一用「类型色 + 标题首字」的色块。
+ *
+ * 为什么不放影视海报：海报只能靠 TMDB 刮削，实测命中率 20-30%（库存里大量是短剧，
+ * TMDB 没有条目），结果是列表里一半有图一半没图 —— 那比统一没有更难用。
+ * 所以这里刻意做成「设计过的占位」而不是「缺图」：按内容类型分配色相，
+ * 同一个列表里能靠颜色快速区分影视/课程/软件。
+ */
 function ui_cover(array $row, int $px = 80): string
 {
-    if (function_exists('poster_of')) {
-        $poster = poster_of((string) ($row['id'] ?? ''));
-        if ($poster !== null && ($poster['poster_path'] ?? '') !== '') {
-            $size = $px >= 76 ? 'w185' : 'w154';
-            $src = poster_url($poster, $size);
-            // 图片挂了（CDN 被墙/被盗链）就切回色块，不留破图
-            return '<span class="cover-wrap" style="width:' . $px . 'px;height:' . $px . 'px">'
-                . '<img class="cover-img" src="' . e($src) . '" alt="" loading="lazy" decoding="async"'
-                . ' onerror="this.parentNode.classList.add(\'is-broken\')">'
-                . '<span class="cover-fallback">' . ui_cover_initial($row, $px) . '</span>'
-                . '</span>';
-        }
-    }
-    return ui_cover_initial($row, $px);
-}
-
-/** 首字色块（无海报时的兜底） */
-function ui_cover_initial(array $row, int $px = 80): string
-{
-    $colors = UI_PROVIDERS[$row['provider']][2] ?? ['#64748b', '#334155'];
+    $colors = UI_TYPE_COLORS[$row['type']] ?? UI_TYPE_COLORS['other'];
     $source = trim((string) ($row['core_title'] ?: $row['title']));
     // 标题常以 #、【、[ 等符号开头，封面取第一个有意义的字符
     $initial = '盘';
@@ -103,8 +102,8 @@ function ui_cover_initial(array $row, int $px = 80): string
         $initial = mb_strtoupper($m[0]);
     }
     $style = sprintf(
-        'width:%dpx;height:%dpx;background-image:linear-gradient(135deg,%s,%s);font-size:%dpx',
-        $px, $px, $colors[0], $colors[1], (int) round($px * 0.34)
+        'width:%dpx;height:%dpx;background-image:linear-gradient(145deg,%s,%s);font-size:%dpx',
+        $px, $px, $colors[0], $colors[1], (int) round($px * 0.36)
     );
     return '<span class="cover" style="' . e($style) . '" aria-hidden="true">' . e($initial) . '</span>';
 }

@@ -8,7 +8,6 @@ require_once __DIR__ . '/../src/user.php';
 require_once __DIR__ . '/../src/settings.php';
 require_once __DIR__ . '/../src/ui.php';
 require_once __DIR__ . '/../src/promo.php';
-require_once __DIR__ . '/../src/poster.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);

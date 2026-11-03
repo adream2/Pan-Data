@@ -2,7 +2,18 @@
 declare(strict_types=1);
 
 /**
- * 封面刮削：用 TMDB 按「标题 + 年份」匹配海报，缓存到 posters 表。
+ * 封面刮削（TMDB）——**当前未接入界面**。
+ *
+ * 下线原因：命中率只有 20-30%（库存里大量是短剧，TMDB 没有条目），
+ * 列表里一半有图一半没图，比统一色块更难用。前端已改为统一「类型色 + 首字」封面。
+ *
+ * 要重新启用需要三步：
+ *   1. src/settings.php 的 cfg_spec() 里加回 poster_* 配置项（见 git 历史 1a0e529）
+ *   2. src/ui.php 的 ui_cover() 里加回海报分支（同样见 1a0e529）
+ *   3. 后台加回「封面刮削」页（public/admin.php 同 commit）
+ *
+ * 匹配逻辑本身是可用的，bin/test_poster_match.php 的 8 个用例仍在。
+ * 原始说明：用 TMDB 按「标题 + 年份」匹配海报，缓存到 posters 表。
  *
  * 为什么是 TMDB：
  *   1. 有正式 API，免费，中文数据齐全；

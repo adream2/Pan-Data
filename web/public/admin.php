@@ -10,7 +10,6 @@ require_once __DIR__ . '/../src/admin_extra.php';
 require_once __DIR__ . '/../src/ui.php';
 require_once __DIR__ . '/../src/settings.php';
 require_once __DIR__ . '/../src/promo.php';
-require_once __DIR__ . '/../src/poster.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -232,43 +231,7 @@ if ($action !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash($n > 0 ? "已批量处理 {$n} 条" : '没有选中待审投稿');
             redirect('/admin.php?r=subs');
 
-        case 'poster_batch':
-            $type = (string) ($_POST['type'] ?? 'movie');
-            $limit = (int) ($_POST['limit'] ?? 20);
-            $r = poster_batch($limit, $type);
-            flash("封面刮削：命中 {$r['ok']}，未命中 {$r['miss']}，处理 " . ($r['total'] ?? 0) . " 条（{$r['note']}）",
-                $r['ok'] > 0 ? 'ok' : 'err');
-            redirect('/admin.php?r=poster');
 
-        case 'poster_one':
-            $rid = (string) ($_POST['resource_id'] ?? '');
-            $row = $rid !== '' ? promo_resource($rid) : null;
-            if ($row === null) {
-                flash('资源不存在', 'err');
-            } else {
-                $r = poster_fetch_resource($row, true);
-                flash($r['ok'] ? '已抓到封面：' . $r['poster']['title'] : '未命中（可换更精确的片名后重试）',
-                    $r['ok'] ? 'ok' : 'err');
-            }
-            redirect('/admin.php?r=poster');
-
-        case 'poster_clear':
-            poster_migrate();
-            db()->exec('DELETE FROM posters');
-            flash('已清空封面缓存，下次刮削会重新匹配');
-            redirect('/admin.php?r=poster');
-
-        case 'password':
-            $new = (string) ($_POST['new_password'] ?? '');
-            if (strlen($new) < 8) {
-                flash('新密码至少 8 位', 'err');
-            } else {
-                $admin = require_admin();
-                db()->prepare('UPDATE admins SET pass_hash = ? WHERE id = ?')
-                    ->execute([password_hash($new, PASSWORD_ARGON2ID), $admin['id']]);
-                flash('密码已更新');
-            }
-            redirect('/admin.php?r=settings');
     }
 }
 
@@ -316,7 +279,6 @@ $navItems = [
     'users'     => '用户管理',
     'reports'   => '举报处理',
     'bulk'      => '批量录入',
-    'poster'    => '封面刮削',
     'promo'     => '拉新任务',
     'promo_accounts' => '网盘账号',
     'settings'  => '设置',
@@ -516,105 +478,6 @@ switch ($route) {
             . '<section class="mt-5 rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="mb-3 text-sm font-semibold">最近日志</h2><table class="w-full text-left">'
             . ($logRows ?: '<tr><td class="py-6 text-center text-xs text-neutral-400">暂无</td></tr>') . '</table></section>';
-        break;
-
-    case 'poster':
-        $ps = poster_stats();
-        $keyOn = cfg_get('poster_tmdb_key') !== '';
-        $enabled = cfg_get('poster_enabled') === '1';
-
-        $guide = '';
-        if (!$enabled || !$keyOn) {
-            $guide = '<div class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">'
-                . (!$enabled ? '封面刮削总开关是关的。' : '')
-                . (!$keyOn ? '还没有配 TMDB API Key。' : '')
-                . ' 去 <a class="underline" href="/admin.php?r=settings">设置 → 封面</a> 打开并填入 Key 后再来。'
-                . '<div class="mt-1 text-[11px] text-amber-700/80">'
-                . '免费申请：themoviedb.org 注册 → 设置 → API → 申请开发者 Key（约 1 分钟）。</div></div>';
-        }
-
-        $kpi = '<div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">'
-            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . number_format($ps['covered']) . '</div>'
-            . '<div class="mt-0.5 text-xs text-neutral-400">已覆盖资源</div></div>'
-            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . number_format($ps['movie_total']) . '</div>'
-            . '<div class="mt-0.5 text-xs text-neutral-400">影视资源总数</div></div>'
-            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . $ps['rate'] . '%</div>'
-            . '<div class="mt-0.5 text-xs text-neutral-400">覆盖率</div></div>'
-            . '<div class="kpi"><div class="text-2xl font-semibold tabular-nums">' . number_format($ps['missed']) . '</div>'
-            . '<div class="mt-0.5 text-xs text-neutral-400">已试未命中</div></div></div>';
-
-        // 命中样本
-        $hits = db()->query("SELECT p.*, r.title AS res_title, r.type AS res_type FROM posters p
-            JOIN resources r ON r.id = p.resource_id
-            WHERE p.poster_path != '' ORDER BY p.score DESC, p.created_at DESC LIMIT 12")->fetchAll();
-        $hitHtml = '';
-        foreach ($hits as $h) {
-            $hitHtml .= '<a class="group" href="/detail?id=' . e(urlencode((string) $h['resource_id'])) . '" title="' . e((string) $h['res_title']) . '">'
-                . '<span class="cover-wrap block" style="width:92px;height:132px">'
-                . '<img class="cover-img" src="' . e(poster_url($h, 'w185')) . '" alt="" loading="lazy"
-                    onerror="this.parentNode.classList.add(\'is-broken\')">'
-                . '<span class="cover-fallback"><span class="cover" style="width:92px;height:132px">无</span></span></span>'
-                . '<span class="mt-1 block w-[92px] truncate text-[10px] text-neutral-500 group-hover:text-blue-600">'
-                . e(mb_substr((string) $h['title'], 0, 10)) . '</span></a>';
-        }
-
-        // 未命中样本（可重试）
-        $miss = db()->query("SELECT p.*, r.title AS res_title, r.year AS res_year FROM posters p
-            JOIN resources r ON r.id = p.resource_id
-            WHERE p.poster_path = '' ORDER BY p.created_at DESC LIMIT 15")->fetchAll();
-        $missRows = '';
-        foreach ($miss as $m) {
-            $missRows .= '<tr class="border-b border-neutral-100 last:border-0">'
-                . '<td class="px-3 py-2 text-xs text-neutral-700">' . e(mb_substr((string) $m['res_title'], 0, 34)) . '</td>'
-                . '<td class="px-3 py-2 font-mono text-[11px] text-neutral-400">' . e((string) ($m['res_year'] ?: '—')) . '</td>'
-                . '<td class="px-3 py-2 text-[11px] text-neutral-400">' . e((string) $m['title']) . '</td>'
-                . '<td class="px-3 py-2 text-right"><form method="post" class="inline">'
-                . '<input type="hidden" name="_csrf" value="' . csrf_token() . '">'
-                . '<input type="hidden" name="action" value="poster_one">'
-                . '<input type="hidden" name="resource_id" value="' . e((string) $m['resource_id']) . '">'
-                . '<button class="rounded-md bg-white px-2 py-0.5 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">重试</button>'
-                . '</form></td></tr>';
-        }
-
-        $runForm = '<section class="rounded-lg bg-white p-5 shadow-sm">'
-            . '<h2 class="text-sm font-semibold">批量刮削</h2>'
-            . '<p class="mt-1 text-xs text-neutral-500">按「有年份优先、最近发布优先」挑还没刮过的资源。'
-            . '每条之间会按设置间隔等待，避免触发限流。</p>'
-            . '<form method="post" class="mt-3 flex flex-wrap items-end gap-2">'
-            . '<input type="hidden" name="_csrf" value="' . csrf_token() . '">'
-            . '<input type="hidden" name="action" value="poster_batch">'
-            . '<div><label class="mb-1 block text-[11px] text-neutral-500">类型</label>'
-            . '<select class="input w-32" name="type"><option value="movie">影视</option>'
-            . '<option value="course">课程</option><option value="all">全部类型</option></select></div>'
-            . '<div><label class="mb-1 block text-[11px] text-neutral-500">本次条数</label>'
-            . '<input class="input w-24" type="number" name="limit" value="20" min="1" max="100"></div>'
-            . '<button class="btn" type="submit">开始刮削</button>'
-            . '<span class="ml-auto text-[11px] text-neutral-400">建议先跑 20 条看命中率</span>'
-            . '</form>'
-            . '<form method="post" class="mt-3 border-t border-neutral-100 pt-3">'
-            . '<input type="hidden" name="_csrf" value="' . csrf_token() . '">'
-            . '<input type="hidden" name="action" value="poster_clear">'
-            . '<button class="text-[11px] text-neutral-400 hover:text-rose-600" type="submit"'
-            . ' onclick="return confirm(\'清空后需要重新刮削（已下载的图片文件不会被删）\')">清空封面缓存</button></form>'
-            . '</section>';
-
-        $body = $kpi . $guide
-            . '<div class="grid items-start gap-5 lg:grid-cols-[1fr_380px]">'
-            . '<section class="rounded-lg bg-white p-5 shadow-sm">'
-            . '<h2 class="text-sm font-semibold">已命中封面</h2>'
-            . ($hitHtml !== ''
-                ? '<div class="mt-3 flex flex-wrap gap-3">' . $hitHtml . '</div>'
-                : '<p class="mt-3 text-xs text-neutral-400">还没有命中任何封面。先跑一次批量刮削。</p>')
-            . '</section>' . $runForm . '</div>'
-            . '<section class="mt-5 overflow-hidden rounded-lg bg-white shadow-sm">'
-            . '<div class="px-5 pt-4"><h2 class="text-sm font-semibold">未命中样本</h2>'
-            . '<p class="mt-1 text-xs text-neutral-500">短剧、AI 短剧、网课这类在 TMDB 里通常没有条目，未命中是正常的。'
-            . '命中后同一部剧的其他来源会复用同一张封面。</p></div>'
-            . '<table class="mt-2 w-full text-left"><thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white">'
-            . '<tr><th class="px-3 py-2 font-medium">资源标题</th><th class="px-3 py-2 font-medium">年份</th>'
-            . '<th class="px-3 py-2 font-medium">用于匹配的名字</th><th class="px-3 py-2 font-medium"></th></tr></thead><tbody>'
-            . ($missRows ?: '<tr><td colspan="4" class="px-3 py-8 text-center text-xs text-neutral-400">没有未命中记录</td></tr>')
-            . '</tbody></table></section>';
         break;
 
     case 'promo':
