@@ -20,8 +20,6 @@ function cfg_spec(): array
         // ---- 投稿 ----
         'submit_open' => ['group' => 'submit', 'label' => '开放投稿', 'desc' => '关闭后前台提示投稿暂闭', 'kind' => 'select',
             'def' => '1', 'options' => ['1' => '开启', '0' => '关闭']],
-        'submit_require_login' => ['group' => 'submit', 'label' => '投稿需登录', 'desc' => '开启后匿名访客不能投稿', 'kind' => 'select',
-            'def' => '0', 'options' => ['0' => '允许匿名', '1' => '必须登录']],
         'submit_max_per_hour' => ['group' => 'submit', 'label' => '投稿限流（条/小时/IP）', 'desc' => '0 = 不限制', 'kind' => 'int', 'def' => '6'],
         'submit_dup_skip' => ['group' => 'submit', 'label' => '重复链接自动跳过', 'desc' => '同链接已在库则拒绝', 'kind' => 'select',
             'def' => '1', 'options' => ['1' => '是', '0' => '否']],

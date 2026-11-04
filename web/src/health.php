@@ -19,6 +19,23 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/repo.php';
 
+/**
+ * 提交举报，并立刻做一次联动判定（够票自动下线 + 备用来源接管）。
+ *
+ * 举报是匿名的：本站没有用户体系，只靠 IP 限流（前台 10 次/小时）防刷，
+ * 判定时也按 DISTINCT IP 计数，同一个人连点不算多个意见。
+ *
+ * @return array{count:int,bad:int,auto_invalid:bool,switched:bool}
+ */
+function report_create(string $resourceId, string $kind, string $note): array
+{
+    db()->prepare('INSERT INTO reports(resource_id, kind, note, ip, created_at) VALUES(?,?,?,?,?)')
+        ->execute([$resourceId, $kind, mb_substr($note, 0, 200),
+            (string) ($_SERVER['REMOTE_ADDR'] ?? ''), now_iso()]);
+
+    return health_after_report($resourceId);
+}
+
 /** 计入「链接挂了」的举报类型 */
 function health_bad_kinds(): array
 {

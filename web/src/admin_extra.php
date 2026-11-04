@@ -9,25 +9,6 @@ declare(strict_types=1);
 function admin_extra_actions(string $action): bool
 {
     switch ($action) {
-        case 'user_toggle':
-            db()->prepare("UPDATE users SET status = CASE WHEN status = 'active' THEN 'banned' ELSE 'active' END WHERE id = ?")
-                ->execute([(int) ($_POST['id'] ?? 0)]);
-            flash('用户状态已更新');
-            redirect('/admin.php?r=users');
-        case 'user_apikey':
-            api_key_for((int) ($_POST['id'] ?? 0));
-            flash('已生成新 API Key（90 天有效）');
-            redirect('/admin.php?r=users');
-        case 'user_reset':
-            $pw = (string) ($_POST['password'] ?? '');
-            if (strlen($pw) < 6) {
-                flash('密码至少 6 位', 'err');
-            } else {
-                db()->prepare('UPDATE users SET pass_hash = ? WHERE id = ?')
-                    ->execute([password_hash($pw, PASSWORD_DEFAULT), (int) ($_POST['id'] ?? 0)]);
-                flash('密码已重置');
-            }
-            redirect('/admin.php?r=users');
         case 'account_save':
             $provider = (string) ($_POST['provider'] ?? 'quark');
             $label = trim((string) ($_POST['label'] ?? ''));
@@ -156,43 +137,6 @@ function bulk_import_lines(string $raw): array
 function admin_extra_body(string $route): string
 {
     switch ($route) {
-        case 'users':
-            $rows = db()->query('SELECT u.*,
-                (SELECT COUNT(*) FROM submissions s WHERE s.contact = u.username) subs,
-                (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) favs
-                FROM users u ORDER BY u.id DESC LIMIT 200')->fetchAll();
-            $tr = '';
-            foreach ($rows as $u) {
-                $active = $u['status'] === 'active';
-                $badge = $active
-                    ? '<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 ring-1 ring-emerald-200">正常</span>'
-                    : '<span class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700 ring-1 ring-rose-200">封禁</span>';
-                $api = $u['api_expires_at'] ? substr((string) $u['api_expires_at'], 0, 10) : '—';
-                $tr .= '<tr class="border-b border-neutral-100 last:border-0">'
-                    . '<td class="px-4 py-3"><div class="text-[13px] font-medium">' . e((string) $u['username']) . '</div>'
-                    . '<div class="font-mono text-[11px] text-neutral-400">#' . (int) $u['id'] . '</div></td>'
-                    . '<td class="px-4 py-3">' . $badge . '</td>'
-                    . '<td class="px-4 py-3 text-xs tabular-nums text-neutral-500">' . (int) $u['subs'] . '</td>'
-                    . '<td class="px-4 py-3 text-xs tabular-nums text-neutral-500">' . (int) $u['favs'] . '</td>'
-                    . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e($api) . '</td>'
-                    . '<td class="px-4 py-3"><div class="flex flex-wrap gap-1">'
-                    . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
-                    . '<input type="hidden" name="action" value="user_toggle"><input type="hidden" name="id" value="' . (int) $u['id'] . '">'
-                    . '<button class="rounded-md bg-white px-2 py-1 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">'
-                    . ($active ? '封禁' : '解封') . '</button></form>'
-                    . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
-                    . '<input type="hidden" name="action" value="user_apikey"><input type="hidden" name="id" value="' . (int) $u['id'] . '">'
-                    . '<button class="rounded-md bg-white px-2 py-1 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">发 Key</button></form>'
-                    . '</div></td></tr>';
-            }
-            return '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
-                . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white"><tr>'
-                . '<th class="px-4 py-2.5 font-medium">用户</th><th class="px-4 py-2.5 font-medium">状态</th>'
-                . '<th class="px-4 py-2.5 font-medium">投稿</th><th class="px-4 py-2.5 font-medium">收藏</th>'
-                . '<th class="px-4 py-2.5 font-medium">API 到期</th><th class="px-4 py-2.5 font-medium">操作</th>'
-                . '</tr></thead><tbody>'
-                . ($tr ?: '<tr><td colspan="6" class="px-4 py-10 text-center text-sm text-neutral-400">还没有用户</td></tr>')
-                . '</tbody></table></div>';
 
         case 'accounts':
             $rows = db()->query('SELECT * FROM pan_accounts ORDER BY id DESC')->fetchAll();

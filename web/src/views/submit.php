@@ -3,7 +3,6 @@
  * @var bool   $done
  * @var string $error
  * @var bool   $closed
- * @var bool   $needLogin
  * @var string $reviewMode
  */
 $reviewMode = $reviewMode ?? 'all';
@@ -33,16 +32,6 @@ $instant = $reviewMode === 'none';
       <h1 class="mt-4 text-base font-semibold text-gray-900">投稿暂时关闭</h1>
       <p class="mt-1.5 text-sm text-gray-500">站方已暂停接收新投稿，稍后再来看看</p>
       <a class="btn-primary mt-6 inline-flex" href="/">回首页搜索</a>
-    </div>
-
-  <?php elseif (!empty($needLogin)): ?>
-    <div class="rounded-lg bg-white p-10 text-center shadow-lg shadow-slate-900/10">
-      <h1 class="text-base font-semibold text-gray-900">投稿需要先登录</h1>
-      <p class="mt-1.5 text-sm text-gray-500">登录后投稿会归到「我的投稿」，方便跟踪审核结果</p>
-      <div class="mt-6 flex justify-center gap-2">
-        <a class="btn-primary" href="/user.php?r=login">去登录</a>
-        <a class="btn-secondary" href="/user.php?r=register">注册账号</a>
-      </div>
     </div>
 
   <?php else: ?>

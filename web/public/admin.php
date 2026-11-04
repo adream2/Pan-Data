@@ -5,7 +5,7 @@ require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/auth.php';
 require_once __DIR__ . '/../src/moderation.php';
-require_once __DIR__ . '/../src/user.php';
+require_once __DIR__ . '/../src/stats.php';
 require_once __DIR__ . '/../src/admin_extra.php';
 require_once __DIR__ . '/../src/ui.php';
 require_once __DIR__ . '/../src/settings.php';
@@ -277,7 +277,6 @@ $navItems = [
     'subs'      => '投稿审核',
     'res'       => '资源管理',
     'sync'      => '同步与采集',
-    'users'     => '用户管理',
     'reports'   => '举报处理',
     'bulk'      => '批量录入',
     'promo'     => '拉新任务',

@@ -19,8 +19,6 @@ $lines = [
     'User-agent: *',
     'Allow: /',
     'Disallow: /admin.php',
-    'Disallow: /user.php',
-    'Disallow: /api.php',
     'Disallow: /poster.php',
     '',
     '# 搜索参数页与筛选组合由页面级 noindex 控制，不在此拦截',

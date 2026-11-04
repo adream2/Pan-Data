@@ -111,7 +111,12 @@ function schema_ready(): bool
     }
 }
 
-/** 增量升级：用户中心、收藏、举报、多账号、点击统计（PRAGMA user_version 控制） */
+/**
+ * 增量升级：举报、点击统计、搜索日志、网盘账号（PRAGMA user_version 控制）
+ *
+ * 2026-11 起不再有前台用户体系：站点只服务匿名访客，管理只有一个站长账号（admins）。
+ * users / favorites 两张表已从建表语句里移除；老库里残留的表不影响运行。
+ */
 function schema_upgrade(): void
 {
     $version = (int) db()->query('PRAGMA user_version')->fetchColumn();
@@ -119,27 +124,6 @@ function schema_upgrade(): void
         return;
     }
     $pdo = db();
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS users (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    username       TEXT NOT NULL UNIQUE,
-    email          TEXT,
-    pass_hash      TEXT NOT NULL,
-    status         TEXT NOT NULL DEFAULT 'active',
-    api_key        TEXT UNIQUE,
-    api_expires_at TEXT,
-    created_at     TEXT NOT NULL,
-    last_login_at  TEXT
-)
-SQL);
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS favorites (
-    user_id     INTEGER NOT NULL,
-    resource_id TEXT NOT NULL,
-    created_at  TEXT NOT NULL,
-    PRIMARY KEY (user_id, resource_id)
-)
-SQL);
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS reports (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

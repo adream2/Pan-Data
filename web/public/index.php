@@ -4,8 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/moderation.php';
-require_once __DIR__ . '/../src/user.php';
 require_once __DIR__ . '/../src/health.php';
+require_once __DIR__ . '/../src/stats.php';
 require_once __DIR__ . '/../src/settings.php';
 require_once __DIR__ . '/../src/ui.php';
 require_once __DIR__ . '/../src/promo.php';
@@ -19,15 +19,13 @@ if (!schema_ready()) {
     schema_migrate();
 }
 schema_upgrade();
-$currentUser = user_current();
 
 // 详情页的举报是直接 POST 回详情页的，在这里处理掉
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'report') {
     csrf_check();
     $rid = (string) ($_POST['resource_id'] ?? '');
     if ($rid !== '' && rate_limit('report', 10, 3600)) {
-        $rep = report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''),
-            $currentUser !== null ? (int) $currentUser['id'] : null);
+        $rep = report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''));
         // 自动切换到备用来源是对用户有实际意义的结果，要说出来，
         // 否则他刷新页面看到换了平台会以为是 bug
         if (!empty($rep['switched'])) {
@@ -237,7 +235,6 @@ switch ($route) {
             break;
         }
         click_track((string) $row['id']);
-        $isFav = $currentUser !== null && user_is_favorite((int) $currentUser['id'], (string) $row['id']);
         $versions = repo_versions((string) $row['core_title'], 12);
         $related = repo_search(['q' => mb_substr((string) $row['core_title'], 0, 12)], 1, 7)['items'];
         // 同频道的其他资源：详情页独有的内容块，也是给频道路径导流
@@ -247,8 +244,6 @@ switch ($route) {
             'versions'    => $versions,
             'related'     => $related,
             'channelMore' => $channelMore,
-            'isFav'       => $isFav,
-            'currentUser' => $currentUser,
         ]);
         // 标题带上平台与「网盘」意图词：用户搜的是「xx 网盘」，不是「xx」
         $cleanTitle = ui_clean_title((string) $row['title']);
@@ -276,13 +271,9 @@ switch ($route) {
         $error = '';
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             csrf_check();
-            $needLogin = cfg_get_bool('submit_require_login');
             $maxPerHour = cfg_get_int('submit_max_per_hour');
             if (cfg_get('submit_open') !== '1') {
                 $error = '投稿暂时关闭';
-            } elseif ($needLogin && $currentUser === null) {
-                $error = '投稿需要先登录';
-                redirect('/user.php?r=login');
             } elseif ($maxPerHour > 0 && !rate_limit('submit', $maxPerHour, 3600)) {
                 $error = '投稿太频繁，休息一下再来';
             } else {
@@ -339,7 +330,6 @@ switch ($route) {
             'done' => $done,
             'error' => $error,
             'closed' => cfg_get('submit_open') !== '1',
-            'needLogin' => cfg_get_bool('submit_require_login') && $currentUser === null,
             'reviewMode' => cfg_get('review_mode'),
         ]);
         $title = '投稿 - ' . $siteName;

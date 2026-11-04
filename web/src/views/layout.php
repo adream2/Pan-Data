@@ -49,7 +49,6 @@ $siteTitleTag = ($siteHeading ?? false) ? 'h1' : 'div';
 <div class="mx-auto max-w-7xl">
 
   <?php
-  $navUser = function_exists('user_current') ? user_current() : null;
   $siteName = setting('site_name', (string) cfg('site_name'));
   ?>
   <header class="site-header">
@@ -62,6 +61,7 @@ $siteTitleTag = ($siteHeading ?? false) ? 'h1' : 'div';
       <a href="/" class="text-white no-underline transition hover:text-gray-200"><?= e($siteName) ?></a>
     </<?= $siteTitleTag ?>>
 
+    <?php // 前台只留访客能用的三件事：找资源、追更、投稿。没有账号体系，所以没有登录/用户/后台入口 ?>
     <nav class="header-nav" aria-label="主导航">
       <a class="header-btn hidden sm:inline-flex" href="/search" title="浏览全部资源">
         <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="6"/><path d="m13.5 13.5 3.5 3.5"/></svg>
@@ -74,25 +74,6 @@ $siteTitleTag = ($siteHeading ?? false) ? 'h1' : 'div';
       <a class="header-btn" href="/submit" title="投稿一个网盘链接">
         <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15V5m0 0-4 4m4-4 4 4"/></svg>
         投稿
-      </a>
-      <a class="header-btn hidden sm:inline-flex" href="/api.php?action=stats" title="查看开放接口">
-        <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 6-4 4 4 4m6-8 4 4-4 4"/></svg>
-        API
-      </a>
-      <?php if ($navUser): ?>
-        <a class="header-btn" href="/user.php?r=me" title="用户中心">
-          <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
-          <?= e((string) $navUser['username']) ?>
-        </a>
-      <?php else: ?>
-        <a class="header-btn" href="/user.php?r=login" title="登录账号">
-          <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 7l3 3-3 3M15 10H4m8-6h4v12h-4"/></svg>
-          登录
-        </a>
-      <?php endif; ?>
-      <a class="header-btn hidden md:inline-flex" href="/admin.php" title="进入管理后台">
-        <svg class="size-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2 3 5v6c0 4 3 6.5 7 7 4-.5 7-3 7-7V5l-7-3Z"/></svg>
-        后台
       </a>
     </nav>
 
@@ -134,8 +115,6 @@ $siteTitleTag = ($siteHeading ?? false) ? 'h1' : 'div';
       <span>© <?= date('Y') ?> <?= e($siteName) ?></span>
       <span class="text-slate-600">|</span>
       <span class="tabular-nums">已收录 <?= number_format((int) (repo_stats()['total'] ?? 0)) ?> 条资源</span>
-      <span class="text-slate-600">|</span>
-      <a class="transition hover:text-slate-200" href="/api.php?action=stats">开放接口</a>
     </p>
   </div>
 </footer>

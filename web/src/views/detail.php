@@ -1,10 +1,8 @@
 <?php
 /**
  * 详情页模板
- * @var array       $row
- * @var array       $related
- * @var bool        $isFav
- * @var array|null  $currentUser
+ * @var array $row
+ * @var array $related
  */
 $href = (string) $row['share_url'];
 $pwd = (string) ($row['pwd'] ?? '');
@@ -81,22 +79,8 @@ $landingSpec = $landingSlug !== null ? seo_landing($landingSlug) : null;
 
       <p class="mt-3 break-all font-mono text-[11px] text-gray-400"><?= e($href) ?></p>
 
-      <!-- 互动行 -->
+      <!-- 互动行：本站不设账号体系，只保留匿名举报 -->
       <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-        <?php if ($currentUser !== null): ?>
-          <form method="post" action="/user.php?r=favs">
-            <input type="hidden" name="_csrf" value="<?= csrf_token() ?>">
-            <input type="hidden" name="action" value="favorite">
-            <input type="hidden" name="resource_id" value="<?= e((string) $row['id']) ?>">
-            <button class="<?= $isFav ? 'btn-ghost !border-amber-300 !bg-amber-50 !text-amber-700' : 'btn-ghost' ?>" type="submit">
-              <svg class="size-3.5" viewBox="0 0 20 20" fill="<?= $isFav ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.6"><path d="m10 3 2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4L5.5 16.7l.9-5L2.8 8.2l5-.7L10 3Z"/></svg>
-              <?= $isFav ? '已收藏' : '收藏' ?>
-            </button>
-          </form>
-        <?php else: ?>
-          <a class="btn-ghost" href="/user.php?r=login">登录后收藏</a>
-        <?php endif; ?>
-
         <span class="inline-flex items-center gap-1 text-[11px] text-gray-400">
           <svg class="size-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5Z"/><circle cx="10" cy="10" r="2"/></svg>
           <?= number_format(click_count((string) $row['id'])) ?> 次浏览
