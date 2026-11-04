@@ -42,3 +42,6 @@ wpzyk              # 考公考研自习室，正文全是 t.cn 微博短链，�
 # quark_share_group → 0 条消息
 # share_pan         → 0 条消息
 # bdyunpan          → 已停更
+
+# --- 自动扩源（2026-11-04，探针 ≥8 条/页）---
+qukanmovie  # 19 条/页
