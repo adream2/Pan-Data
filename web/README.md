@@ -16,7 +16,8 @@ PHP 8.4+ / SQLite 单文件数据库，零框架零 Composer 依赖。前台搜�
 
 ```bash
 cd web
-php bin/init.php admin '你的密码'        # 建表 + 创建管理员
+php bin/init.php admin '你的密码'        # 建表 + 创建管理员（只在没有管理员时生效）
+php bin/reset-password.php admin '新密码'  # 忘了密码/改密码用这个
 php bin/sync.php index                   # 检查能否连通数据仓库
 php bin/sync.php hot                     # 导入最近 90 天（约 7000 条，1-2 分钟）
 php -S 127.0.0.1:8000 -t public public/router.php
@@ -36,7 +37,7 @@ php -S 127.0.0.1:8000 -t public public/router.php
 | 前台后台入口 | 导航里不放「后台」「登录」，只有站长知道 `/admin.php` |
 
 **管理只有一个账号**：`admins` 表一行，站长登录后改设置、审投稿、看举报。
-密码遗忘用 `php bin/init.php admin '新密码'` 重置（会覆盖同名账号）。
+密码遗忘用 `php bin/reset-password.php admin '新密码'` 重置（账号不存在就新建，幂等）。
 
 举报仍然保留，但走匿名链路：详情页选类型提交，按 IP 限流 10 次/小时，
 计数按 DISTINCT IP（同一个人连点不算多个意见），达阈值自动标失效并尝试换源。
