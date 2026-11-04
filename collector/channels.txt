@@ -32,6 +32,10 @@ shortdramagod
 netdisk_movies
 aliyun_4k_movies
 
+# --- 2026-11 新增：电子书 / 考试教辅 ---
+KaiPanshare        # 电子书，一条消息一本书带 百度/夸克/阿里 三盘  deep=600
+wpzyk              # 考公考研自习室，正文全是 t.cn 微博短链，靠短链解析出真实网盘  deep=600
+
 # --- 探针无产出，暂不采集（留档）---
 # naclzy            → 0 条消息（网页预览受限）
 # yespojie          → 0 条消息

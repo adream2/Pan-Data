@@ -78,6 +78,37 @@ CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 CN_DIGITS = {"零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
              "六": 6, "七": 7, "八": 8, "九": 9}
 TRIM_CHARS = " -_|/\\,.，。:：;；!！?？[]【】()（）<>《》「」『』·•~——　"
+# str.strip(TRIM_CHARS) 会把成对的右括号一起剥掉，
+# 「2027《高考数学•一轮复习讲练测》」会被切成「2027《高考数学•一轮复习讲练测」。
+# 括号类只在落单（右多于左）时才当噪音清理。
+BARE_TRIM_CHARS = " -_|/\\,.，。:：;；!！?？·•~——　"
+CLOSE_TO_OPEN = {
+    ")": "(", "）": "（", "]": "[", "】": "【", ">": "<",
+    "》": "《", "」": "「", "』": "『", "›": "‹", "〕": "〔",
+}
+
+
+def _trim_edges(text: str) -> str:
+    text = text.strip(BARE_TRIM_CHARS)
+    while text and text[-1] in CLOSE_TO_OPEN:
+        close = text[-1]
+        if text.count(CLOSE_TO_OPEN[close]) >= text.count(close):
+            break  # 右括号数量不多于左括号，说明它是配对的，留着
+        text = text[:-1].strip(BARE_TRIM_CHARS)
+    return text
+
+
+def _balance_brackets(text: str) -> str:
+    """补齐频道作者少打的右括号。
+
+    「上海交大附中 570道高中物理必刷经典题（解析版+原题版」这种原文就缺一半的，
+    展示时括号悬空看着像渲染坏了；补上比剥掉更接近作者本意。
+    """
+    for close, open_ in CLOSE_TO_OPEN.items():
+        diff = text.count(open_) - text.count(close)
+        if diff > 0 and (open_ in "（(《<「『["):
+            text = text + close * diff
+    return text
 
 
 def normalize(text: str) -> str:
@@ -144,12 +175,12 @@ def parse_title(raw: str) -> dict:
         before = core
         for pattern in TRAILING_RES:
             core = pattern.sub("", core)
-        core = core.strip(TRIM_CHARS)
+        core = _trim_edges(core)
         if core == before:
             break
     # 落单的括号（如「【尚硅谷】xxx」剥掉前括号后剩下的」）当噪音清掉
     core = re.sub(r"[【】\[\]〔〕]", " ", core)
-    core = normalize(core)
+    core = _balance_brackets(normalize(core))
 
     year_m = YEAR_RE.search(text)
     year = int(year_m.group(1)) if year_m else None

@@ -26,6 +26,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
@@ -52,6 +53,8 @@ AUTO_PROXY_CANDIDATES = [
 # 网盘链接规则：(provider, 正则)。域名别名参考 tgmonitor 的 platforms.py，镜像站一并覆盖。
 PROVIDERS: list[tuple[str, str]] = [
     ("baidu",    r"https?://pan\.baidu\.com/s/[\w\-~]+"),
+    # 百度另一种分享入口：短链跳过去是 /share/init?surl=xxx，surl 就是去掉首字母 1 的分享 id
+    ("baidu",    r"https?://pan\.baidu\.com/share/init\?[\w=&%\-]*surl=[\w\-~]+"),
     ("aliyun",   r"https?://(?:www\.)?(?:aliyundrive|alipan)\.com/s/[\w]+"),
     ("quark",    r"https?://(?:pan\.quark\.cn|pan\.qoark\.cn)/s/[\w\-]+"),
     ("uc",       r"https?://(?:drive|yun)\.uc\.cn/s/[\w\-]+"),
@@ -74,6 +77,15 @@ CODE_RE = re.compile(
 )
 PWD_IN_URL = re.compile(r"[?&]pwd=([0-9a-zA-Z]{4,8})", re.I)
 ANY_URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.I)
+
+# 需要「跟一次跳转」才知道目标在哪的短链服务。
+# 有频道（如 wpzyk）整条消息全是 t.cn 微博短链，正文里看不到任何网盘域名，
+# 不解析就完全抓不到。
+SHORT_HOSTS = {
+    "t.cn", "t.co", "dwz.cn", "url.cn", "suo.im", "sinaurl.cn",
+    "bit.ly", "tinyurl.com", "reurl.cc", "s.id", "w.url.cn",
+}
+SHORT_CACHE = DATA_DIR / "short_cache.jsonl"
 
 # 结构化消息字段（很多资源频道都是「名称：/描述：/链接：」这种模板）
 TITLE_RE = re.compile(r"^[【\[（(]?\s*(?:名\s*称|标\s*题|资源名称|資源名稱|课程名称|书名|剧名|资源)\s*[】\]）)]?\s*[：:]\s*(.+)$")
@@ -98,13 +110,19 @@ RSC_KEYWORDS: dict[str, tuple[str, ...]] = {
                  "去广告", "精简版", "修改版", "解锁版", "纯净版", "绿色版",
                  "内置", "安装包", "插件", "模块", "apk", "exe", "dmg"),
     "ebook": ("电子书", "pdf", "epub", "mobi", "azw3", "书籍", "图书",
-              "教材", "小说", "漫画", "杂志", "读物", "全书", "百科", "册全"),
+              "教材", "小说", "漫画", "杂志", "读物", "全书", "百科", "册全",
+              "作者：", "作者:"),
     "music": ("音乐", "专辑", "歌曲", "mp3", "flac", "wav", "无损", "原声", "ost",
               "演唱会", "钢琴", "吉他", "曲谱", "伴奏"),
     "course": ("教程", "课程", "学习", "教学", "培训", "入门", "进阶", "实战", "网课",
                "公开课", "编程", "python", "java", "前端", "后端", "人工智能", "机器学习",
                "训练营", "训练班", "必修", "体系课", "案例", "运营", "带货",
-               "跨境电商", "干货", "私域", "变现"),
+               "跨境电商", "干货", "私域", "变现",
+               # 考试 / 教辅：考公考研频道的内容几乎全是这类，缺了全落 other
+               "高考", "中考", "考研", "公考", "国考", "省考", "四六级", "雅思", "托福",
+               "真题", "考点", "讲义", "押题", "冲刺", "模拟卷", "复习", "必刷", "题库",
+               "背诵", "默写", "词汇", "试卷", "练习册", "教辅", "一轮", "二轮", "三轮",
+               "笔记", "课件", "同步练习", "错题", "知识点"),
     "movie": ("电影", "剧集", "电视剧", "动漫", "动画", "纪录片", "综艺", "短剧",
               "4k", "1080p", "2160p", "蓝光", "hdr", "remux", "杜比",
               "国漫", "美剧", "韩剧", "日剧", "英剧", "全集", "季全", "高清"),
@@ -263,6 +281,144 @@ def clean_url(url: str) -> str:
     return f"{base}?pwd={pwd}" if pwd else base
 
 
+BAIDU_INIT_RE = re.compile(r"[?&]surl=([\w\-~]+)", re.I)
+
+
+def normalize_share_url(provider: str, url: str) -> str:
+    """把各种入口形式收敛成一种可长期使用的地址。
+
+    百度从短链跳过来常落在 `/share/init?surl=xxx&pwd=6666`，
+    这不是标准分享页（用户打开还要过一次跳转），而 surl 就是分享 id 去掉首位 `1`。
+    转成 `/s/1{surl}?pwd=xxx` 后，去重、巡检、前端展示都按同一套逻辑走。
+    """
+    if provider != "baidu" or "/share/init" not in url:
+        return url
+    m = BAIDU_INIT_RE.search(url)
+    if not m:
+        return url
+    pwd = PWD_IN_URL.search(url)
+    # surl 可能已经是完整的（老数据），已经带 1 前缀就别再加
+    surl = m.group(1)
+    sid = surl if surl.startswith("1") else "1" + surl
+    return f"https://pan.baidu.com/s/{sid}" + (f"?pwd={pwd.group(1)}" if pwd else "")
+
+
+class ShortLinkResolver:
+    """短链 → 真实地址。
+
+    有的频道（如 wpzyk 考公考研自习室）整条消息里没有一个网盘域名，
+    全是 t.cn 微博短链，必须跟一次 302 才知道那是什么盘。
+
+    缓存落盘到 data/short_cache.jsonl 并随 data 分支提交：同一个短链只解析一次，
+    第二轮起整页 0 请求。短链不会失效后再指到另一个盘，所以缓存可以长期使用。
+
+    网络策略：先直连（t.cn / 网盘都在国内），失败再用代理重试，
+    这样墙内墙外的部署都能跑。
+    """
+
+    def __init__(self, direct_opener, proxy_opener=None, cache_path: Path = SHORT_CACHE,
+                 workers: int = 8) -> None:
+        self.direct = direct_opener
+        self.proxy = proxy_opener
+        self.cache_path = cache_path
+        self.workers = workers
+        self.cache: dict[str, str] = {}
+        self._new: list[dict] = []
+        self._load()
+
+    def _load(self) -> None:
+        if not self.cache_path.exists():
+            return
+        for line in self.cache_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            short, real = rec.get("short"), rec.get("real")
+            if short and real:
+                self.cache[short] = real
+
+    def _save(self) -> None:
+        if not self._new:
+            return
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.cache_path.open("a", encoding="utf-8", newline="\n") as fh:
+            for rec in self._new:
+                fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        self._new = []
+
+    @staticmethod
+    def is_short(url: str) -> bool:
+        try:
+            host = (urllib.parse.urlparse(url).hostname or "").lower()
+        except ValueError:
+            return False
+        return host in SHORT_HOSTS
+
+    def collect(self, text: str) -> list[str]:
+        """抽出文本里所有待解析的短链（保留原样，位置不动）。"""
+        out = []
+        for raw in ANY_URL_RE.findall(text):
+            url = raw.rstrip("。，、；;,.）)】]\"'<>")
+            if self.is_short(url):
+                out.append(url)
+        return out
+
+    def _open(self, opener, url: str) -> str | None:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with opener.open(req, timeout=15) as resp:
+            final = resp.geturl()
+            # 没跳转说明短链失效或落到说明页
+            if not final or final == url:
+                return None
+            return final
+
+    def _resolve_one(self, url: str) -> str | None:
+        try:
+            real = self._open(self.direct, url)
+        except Exception:
+            real = None
+        if real is None and self.proxy is not None:
+            try:
+                real = self._open(self.proxy, url)
+            except Exception:
+                real = None
+        if real and not self.is_short(real):
+            return real
+        return None
+
+    def resolve_many(self, urls: list[str]) -> dict[str, str]:
+        uniq: list[str] = []
+        for u in urls:
+            if u not in uniq:
+                uniq.append(u)
+        todo = [u for u in uniq if u not in self.cache]
+        if todo:
+            with ThreadPoolExecutor(max_workers=self.workers) as pool:
+                results = list(pool.map(self._resolve_one, todo))
+            for url, real in zip(todo, results):
+                if real:
+                    self.cache[url] = real
+                    self._new.append({"short": url, "real": real,
+                                      "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+            self._save()
+        return {u: self.cache[u] for u in uniq if u in self.cache}
+
+    @staticmethod
+    def substitute(text: str, mapping: dict[str, str]) -> str:
+        """把正文里的短链替换成真实地址，位置不变——
+        这样「资料名 + 链接」的相邻关系还在，标题才抽得对。"""
+        if not mapping:
+            return text
+        def repl(m: re.Match) -> str:
+            url = m.group(0).rstrip("。，、；;,.）)】]\"'<>")
+            return mapping.get(url, url)
+        return ANY_URL_RE.sub(repl, text)
+
+
 def link_key(provider: str, url: str) -> str:
     path = re.sub(r"^https?://[^/]+", "", url)
     path = re.split(r"[?#]", path)[0]
@@ -332,25 +488,28 @@ def extract_links(text: str) -> list[dict]:
     codes = [(m.start(), m.group(1)) for m in CODE_RE.finditer(text)]
 
     # 先收集所有链接及其绝对位置，再按「区间」分配提取码
-    matches: list[tuple[int, str, str]] = []
+    matches: list[tuple[int, str, str, str]] = []
     seen: set[str] = set()
     offset = 0
     for line in text.split("\n"):
+        # 同一行里「资料名 http://短链」是最常见的写法，行内文字往往比整条消息更适合当标题
+        context = ANY_URL_RE.sub("", line)
+        context = CODE_RE.sub("", context).strip(" 　:：-|，,。·[]()（）　\t")
         for variant in iter_link_variants(line):
             for provider, rx in LINK_RES:
                 for m in rx.finditer(variant):
-                    url = clean_url(m.group(0))
+                    url = normalize_share_url(provider, clean_url(m.group(0)))
                     key = link_key(provider, url)
                     if key in seen:
                         continue
                     seen.add(key)
-                    matches.append((offset + m.start(), provider, url))
+                    matches.append((offset + m.start(), provider, url, context))
         offset += len(line) + 1
-    matches.sort()
+    matches.sort(key=lambda x: x[0])
 
-    bounds = [pos for pos, _, _ in matches] + [10 ** 9]
+    bounds = [pos for pos, _, _, _ in matches] + [10 ** 9]
     found: list[dict] = []
-    for i, (pos, provider, url) in enumerate(matches):
+    for i, (pos, provider, url, context) in enumerate(matches):
         pwd_in_url = PWD_IN_URL.search(url)
         if pwd_in_url:
             pwd = pwd_in_url.group(1)
@@ -362,17 +521,35 @@ def extract_links(text: str) -> list[dict]:
                 pwd = back[-1] if back else None
             if pwd is None:
                 pwd = nearest_code(codes, pos)
-        found.append({"provider": provider, "share_url": url, "pwd": pwd})
+        found.append({"provider": provider, "share_url": url, "pwd": pwd, "context": context})
     return found
 
 
-def build_title(text: str, url: str) -> str:
-    """优先取「名称／标题：xxx」这种结构化字段，否则退回首行。"""
+# 「百度 | 夸克 | 阿里」这种只有平台名的行，不能拿来当标题
+PLATFORM_LINE_RE = re.compile(
+    r"^[\s🔽⬇👇👉➡↓·]*"
+    r"(?:(?:百度|夸克|阿里|阿里云|迅雷|UC|123盘|123云盘|天翼|移动|115|蓝奏|谷歌|网盘|下载|链接|地址|点击)"
+    r"[\s|｜/、,，+&和及]*)+$",
+    re.I,
+)
+
+
+def build_title(text: str, url: str, context: str = "") -> str:
+    """优先取「名称／标题：xxx」这种结构化字段；其次用链接所在行的文字。
+
+    一行一个资源的频道（考试资料、书单）如果只用整条消息的前两行当标题，
+    一条消息里十条资源会全叫同一个名字，检索时根本分不开。
+    """
     lines = [ln.strip() for ln in text.split("\n")]
     for ln in lines:
         m = TITLE_RE.match(ln)
         if m:
             return m.group(1).strip(" 　:：-|，,。")[:120]
+
+    ctx = (context or "").strip(" 　:：-|，,。·")
+    if len(ctx) >= 4 and not PLATFORM_LINE_RE.match(ctx) and "http" not in ctx.lower():
+        return ctx[:120]
+
     picked: list[str] = []
     for ln in lines:
         if not ln or "http" in ln.lower() or PROMO_RE.search(ln):
@@ -401,6 +578,9 @@ def classify_type(title: str) -> str:
             return name
     if YEAR_IN_TITLE_RE.search(title or ""):
         return "movie"
+    # 书名号包裹但一个类型词都没有：基本都是书（《超越智商：为什么聪明人也会做蠢事》）
+    if re.search(r"《[^》]{2,40}》", title or ""):
+        return "ebook"
     return "other"
 
 
@@ -457,7 +637,10 @@ def main() -> int:
     out_file = Path(args.out)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     seen, rows = load_seen(out_file)
-    opener = build_opener(resolve_proxy(args.proxy))
+    proxy = resolve_proxy(args.proxy)
+    opener = build_opener(proxy)
+    # 短链解析走直连优先：t.cn 和网盘都在国内，绕代理反而慢
+    resolver = ShortLinkResolver(build_opener(None), opener)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     added = 0
@@ -476,11 +659,23 @@ def main() -> int:
                 break
             fetched_msgs += len(msgs)
             next_before = min(m["post_id"] for m in msgs)
+
+            # 先把本页所有短链解析成真实地址（带落盘缓存 + 并发），再替换回正文。
+            # 替换而不是另建映射，是为了保住「资料名 + 链接」的相邻关系。
+            pending: list[str] = []
             for msg in msgs:
-                title = build_title(msg["text"], "")
+                pending.extend(resolver.collect(msg["text"]))
+            mapping = resolver.resolve_many(pending) if pending else {}
+            if pending:
+                print(f"  · 短链 {len(set(pending))} 个，解析成功 {len(mapping)} 个")
+
+            for msg in msgs:
+                if mapping:
+                    msg["text"] = resolver.substitute(msg["text"], mapping)
                 desc = build_desc(msg["text"])
-                parsed = parse_title(title)
                 for link in extract_links(msg["text"]):
+                    title = build_title(msg["text"], link["share_url"], link.get("context", ""))
+                    parsed = parse_title(title)
                     item_id = f'{link["provider"]}::{link_key(link["provider"], link["share_url"])}'
                     if item_id in seen:
                         continue
