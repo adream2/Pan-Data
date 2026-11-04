@@ -18,17 +18,26 @@ function repo_log(string $kind, bool $ok, string $message, array $stats = []): v
     $stmt->execute([$kind, $ok ? 1 : 0, $message, json_encode($stats, JSON_UNESCAPED_UNICODE), now_iso()]);
 }
 
-function repo_fts_available(): bool
+function repo_fts_available(bool $reset = false): bool
 {
-    static $ok = null;
-    if ($ok === null) {
-        try {
-            db()->query('SELECT 1 FROM resources_fts LIMIT 1');
-            $ok = true;
-        } catch (Throwable $e) {
-            $ok = false;
-        }
+    // 用全局而不是函数内 static：重建索引后要能刷新这个判断
+    if ($reset) {
+        unset($GLOBALS['__fts_ok']);
     }
+    if (array_key_exists('__fts_ok', $GLOBALS)) {
+        return (bool) $GLOBALS['__fts_ok'];
+    }
+    try {
+        db()->query('SELECT 1 FROM resources_fts LIMIT 1');
+        // 索引表存在但没数据（导入中断、或刚用快速通道灌完还没建索引）时，
+        // 用 FTS 查会「一条都搜不到」，比慢更糟。这种情况先降级 LIKE。
+        $indexed = (int) db()->query('SELECT COUNT(*) FROM resources_fts')->fetchColumn();
+        $total = (int) db()->query('SELECT COUNT(*) FROM resources')->fetchColumn();
+        $ok = $indexed > 0 || $total === 0;
+    } catch (Throwable $e) {
+        $ok = false;
+    }
+    $GLOBALS['__fts_ok'] = $ok;
     return $ok;
 }
 
@@ -104,8 +113,14 @@ function repo_row_same(array $old, array $row): bool
     return true;
 }
 
-/** 把仓库的 resources.json 条目写进本地库（幂等）。 */
-function repo_upsert(array $r, string $origin = 'repo'): string
+/**
+ * 把仓库的 resources.json 条目写进本地库（幂等）。
+ *
+ * $fast = true 走「首次灌库」通道：不做逐字段比对、不写 FTS 索引、直接 INSERT OR REPLACE。
+ * 全新安装时库里本来就是空的，比对毫无意义；而 FTS 双写是单条 5ms 里的大头。
+ * 导入完调用 repo_fts_rebuild() 一次性建索引（实测 8000 条 0.8 秒）。
+ */
+function repo_upsert(array $r, string $origin = 'repo', bool $fast = false): string
 {
     $id = trim((string) ($r['id'] ?? ''));
     if ($id === '' || empty($r['share_url'])) {
@@ -136,6 +151,16 @@ function repo_upsert(array $r, string $origin = 'repo'): string
         ':origin'     => $origin,
         ':ts'         => now_iso(),
     ];
+
+    if ($fast) {
+        $cols = 'id,title,core_title,type,year,season,episode,complete,provider,share_url,pwd,status,'
+            . 'checked_at,sources,mirrors_json,channel,post_url,posted_at,desc,origin,created_at,updated_at';
+        db()->prepare("INSERT OR REPLACE INTO resources({$cols})
+            VALUES(:id,:title,:core_title,:type,:year,:season,:episode,:complete,:provider,:share_url,:pwd,:status,
+              :checked_at,:sources,:mirrors,:channel,:post_url,:posted_at,:desc,:origin,:ts,:ts)")->execute($row);
+        repo_mark_dirty();
+        return 'insert';
+    }
 
     $exists = db()->prepare('SELECT title, core_title, type, year, season, episode, complete,
             provider, share_url, pwd, status, checked_at, sources, mirrors_json, channel,
@@ -178,7 +203,7 @@ function repo_upsert(array $r, string $origin = 'repo'): string
  * 分批后单次持锁只有几百毫秒，而且中途失败也不会丢掉已经写好的部分——
  * upsert 本身幂等，重跑就能补齐。
  */
-function repo_import_payload(array $payload, string $origin): array
+function repo_import_payload(array $payload, string $origin, bool $fast = false): array
 {
     $items = $payload['resources'] ?? [];
     $stat = ['insert' => 0, 'update' => 0, 'same' => 0, 'skip' => 0, 'total' => count($items)];
@@ -192,7 +217,7 @@ function repo_import_payload(array $payload, string $origin): array
                     $stat['skip']++;
                     continue;
                 }
-                $stat[repo_upsert($item, $origin)]++;
+                $stat[repo_upsert($item, $origin, $fast)]++;
             }
             $pdo->commit();
         } catch (Throwable $e) {
@@ -227,13 +252,16 @@ function repo_fetch_json(string $file): ?array
     return null;
 }
 
-function repo_fetch_once(string $file): ?string
+/** 上一次拉取失败的原因，供安装向导/后台给出可操作的提示 */
+function repo_last_error(): string
 {
-    $ch = curl_init(repo_url($file));
-    $headers = ['accept: application/vnd.github.raw', 'user-agent: pansou-php'];
-    if ((string) repo_conf('token', '') !== '') {
-        $headers[] = 'authorization: Bearer ' . (string) repo_conf('token');
-    }
+    return (string) ($GLOBALS['__repo_last_error'] ?? '');
+}
+
+/** @return array{code:int,body:string,error:string} */
+function repo_http_get(string $url, array $headers, string $proxy): array
+{
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
@@ -242,16 +270,67 @@ function repo_fetch_once(string $file): ?string
         CURLOPT_ENCODING       => '',
         CURLOPT_HTTPHEADER     => $headers,
     ]);
-    $proxy = (string) repo_conf('proxy', '');
     if ($proxy !== '') {
         curl_setopt($ch, CURLOPT_PROXY, $proxy);
     }
     $body = curl_exec($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    if (!is_string($body) || $code >= 400) {
-        return null;
+    return [
+        'code'  => (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE),
+        'body'  => is_string($body) ? $body : '',
+        'error' => (string) curl_error($ch),
+    ];
+}
+
+function repo_fetch_once(string $file): ?string
+{
+    $url = repo_url($file);
+    $headers = ['accept: application/vnd.github.raw', 'user-agent: pansou-php'];
+    if ((string) repo_conf('token', '') !== '') {
+        $headers[] = 'authorization: Bearer ' . (string) repo_conf('token');
     }
-    return $body;
+    $proxy = (string) repo_conf('proxy', '');
+    $res = repo_http_get($url, $headers, $proxy);
+
+    // 代理被打爆（GitHub 匿名限额 60 次/小时、或走的是共用出口 IP）时换直连再试一次。
+    // 两条路是不同出口 IP，各有独立额度；反过来直连不通时也一样靠这条兜底。
+    if ($proxy !== '' && ($res['code'] === 0 || $res['code'] === 403 || $res['code'] === 429)) {
+        $alt = repo_http_get($url, $headers, '');
+        if ($alt['code'] >= 200 && $alt['code'] < 400) {
+            $res = $alt;
+        }
+    }
+
+    if ($res['code'] >= 200 && $res['code'] < 400 && $res['body'] !== '') {
+        $GLOBALS['__repo_last_error'] = '';
+        return $res['body'];
+    }
+
+    $GLOBALS['__repo_last_error'] = repo_explain_error($res);
+    return null;
+}
+
+/** 把 GitHub 的错误翻译成「接下来该做什么」 */
+function repo_explain_error(array $res): string
+{
+    $body = trim($res['body']);
+    $msg = '';
+    if ($body !== '' && $body[0] === '{') {
+        $json = json_decode($body, true);
+        $msg = is_array($json) ? (string) ($json['message'] ?? '') : '';
+    }
+    if ($res['code'] === 0) {
+        return '网络不通' . ($res['error'] !== '' ? '（' . $res['error'] . '）' : '') . '，检查代理设置';
+    }
+    if ($res['code'] === 403 || $res['code'] === 429) {
+        if (stripos($msg, 'rate limit') !== false) {
+            return 'GitHub 接口额度用完（匿名每小时 60 次）。填一个 Token（每小时 5000 次），或等一小时再试';
+        }
+        return 'GitHub 拒绝访问（403）' . ($msg !== '' ? '：' . $msg : '') . '，检查 Token 是否有效';
+    }
+    if ($res['code'] === 404) {
+        return '数据文件不存在（404）：仓库/分支/目录配置不对，或这条分支还没生成数据';
+    }
+    return 'HTTP ' . $res['code'] . ($msg !== '' ? '：' . $msg : '');
 }
 
 function repo_index(): ?array
@@ -269,6 +348,26 @@ function repo_import_hot(): array
     $stat = repo_import_payload($payload, 'repo');
     repo_log('import_hot', true, '导入热文件', $stat);
     return $stat;
+}
+
+/**
+ * 全量重建搜索索引（快速通道导入后调用）。
+ * 一次性 INSERT ... SELECT 比逐条写快两个数量级，实测 8000 条 0.8 秒。
+ */
+function repo_fts_rebuild(): int
+{
+    // 注意不能先问 repo_fts_available()：它把「索引为空」当成不可用（是为了搜索降级），
+    // 而这里恰恰就是要从空建起来，问了必然返回 false 然后永远不建。
+    try {
+        db()->exec('DELETE FROM resources_fts');
+        db()->exec('INSERT INTO resources_fts(id, title, core_title, desc)
+            SELECT id, title, core_title, desc FROM resources');
+        $n = (int) db()->query('SELECT COUNT(*) FROM resources_fts')->fetchColumn();
+    } catch (Throwable $e) {
+        return 0; // 这套 SQLite 没编 FTS5，搜索会走 LIKE
+    }
+    repo_fts_available(true);
+    return $n;
 }
 
 /** 导入某个历史分片，如 2026-10。 */

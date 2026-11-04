@@ -14,16 +14,29 @@ PHP 8.4+ / SQLite 单文件数据库，零框架零 Composer 依赖。前台搜�
 
 ## 快速开始
 
+**一行命令起服务，剩下全在浏览器里点：**
+
 ```bash
-cd web
-php bin/init.php admin '你的密码'        # 建表 + 创建管理员（只在没有管理员时生效）
-php bin/reset-password.php admin '新密码'  # 忘了密码/改密码用这个
-php bin/sync.php index                   # 检查能否连通数据仓库
-php bin/sync.php hot                     # 导入最近 90 天（约 7000 条，1-2 分钟）
-php -S 127.0.0.1:8000 -t public public/router.php
+cd web && php -S 127.0.0.1:8000 -t public public/router.php
 ```
 
-打开 http://127.0.0.1:8000 ，后台在 `/admin.php`。
+打开 http://127.0.0.1:8000/install.php ，三步向导：环境检查 → 站点信息 + 管理员 → 导入数据。
+第三步会自动分批拉取热文件和 29 个历史分片，带进度条，中途关页面也能续。
+
+不需要 SSH、不需要先建库、不需要改配置文件。
+
+**命令行方式**（没有 web 权限，或要写进自动化脚本时）：
+
+```bash
+cd web
+php bin/init.php admin '你的密码'          # 建表 + 创建管理员（只在没有管理员时生效）
+php bin/reset-password.php admin '新密码'  # 忘了密码/改密码用这个
+php bin/sync.php index                     # 检查能否连通数据仓库
+php bin/sync.php all                       # 全量导入（热文件 + 所有分片）
+php bin/sync.php auto                      # 增量（cron 用这个）
+```
+
+后台在 `/admin.php`，前台导航里不放入口。
 
 ## 没有会员体系（有意为之）
 
