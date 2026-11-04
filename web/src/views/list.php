@@ -63,6 +63,17 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
     <button class="search-btn" type="submit">搜索</button>
   </form>
 
+  <?php if (!empty($res['alias_expanded']) && (int) $res['total'] > 0): ?>
+  <p class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 px-1 text-[11px] text-gray-400">
+    <span>已按同义词扩展</span>
+    <?php foreach ((array) $res['alias_hits'] as $from => $alts): ?>
+      <span class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-gray-500">
+        <?= e((string) $from) ?><span class="text-gray-300">≈</span><?= e(implode('、', array_slice((array) $alts, 0, 3))) ?>
+      </span>
+    <?php endforeach; ?>
+  </p>
+  <?php endif; ?>
+
   <!-- 平台筛选 -->
   <nav class="mt-4 flex flex-wrap gap-1.5" aria-label="平台筛选">
     <?= ui_pill(array_filter(['q' => $q, 'type' => $type], fn($v) => $v !== ''), '全部平台', $provider === '', $q === '' ? $provTotal : 0) ?>
@@ -144,16 +155,49 @@ $pagerQuery = $landing !== null ? [] : $baseQuery;
 
 <section class="panel" aria-label="资源列表">
   <?php if ($res['items'] === []): ?>
-    <div class="flex flex-col items-center justify-center px-6 py-20 text-center">
-      <svg class="mb-5 size-20 text-gray-200" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+    <?php
+    // 空结果是最该抢救的时刻：给「确认搜得到」的候选词，而不是一句「换个词试试」。
+    // 每个候选都实测一次，宁可少给也不给死路。
+    $suggestions = [];
+    if ($q !== '' && empty($bareList)) {
+        foreach (alias_suggest($q, 6) as $cand) {
+            if (repo_probe($cand) || repo_has_results($cand)) {
+                $suggestions[] = $cand;
+            }
+            if (count($suggestions) >= 4) {
+                break;
+            }
+        }
+    }
+    ?>
+    <div class="flex flex-col items-center justify-center px-6 py-16 text-center">
+      <svg class="mb-5 size-16 text-gray-200" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <rect x="10" y="18" width="44" height="32" rx="4"/><path d="M10 28h44"/><circle cx="17" cy="23" r="1.6" fill="currentColor"/>
         <path d="M22 40h20"/>
       </svg>
-      <p class="text-base font-medium text-gray-600"><?= $q !== '' ? '没有找到相关资源' : '暂无资源数据' ?></p>
-      <p class="mt-1.5 text-sm text-gray-400">
-        <?= $q !== '' ? '换个关键词试试，或者' : '资源正在整理中，或者' ?>
-        <a class="text-blue-600 hover:underline" href="/submit">投稿</a> 一条
+      <p class="text-base font-medium text-gray-600"><?= $q !== '' ? '没有找到「' . e($q) . '」' : '暂无资源数据' ?></p>
+
+      <?php if ($suggestions !== []): ?>
+        <p class="mt-1.5 text-xs text-gray-400">你要找的是不是</p>
+        <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <?php foreach ($suggestions as $sg): ?>
+            <a class="inline-flex items-center rounded-full bg-white px-3.5 py-1.5 text-sm text-blue-700 shadow-sm ring-1 ring-blue-100 transition hover:bg-blue-50"
+               href="/search?q=<?= e(urlencode($sg)) ?>"><?= e($sg) ?></a>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+
+      <p class="mt-4 text-xs text-gray-400">
+        <?php if ($q !== ''): ?>换个关键词，或者<?php else: ?>资源正在整理中，或者<?php endif; ?>
+        去 <a class="text-blue-600 hover:underline" href="/submit">投稿</a> 一条
       </p>
+
+      <div class="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
+        <span>按分类找</span>
+        <?php foreach (seo_landings() as $slug => $spec): ?>
+          <a class="hover:text-blue-600" href="/<?= e($slug) ?>"><?= e((string) $spec['h1']) ?></a>
+        <?php endforeach; ?>
+      </div>
     </div>
 <?php else: ?>
 

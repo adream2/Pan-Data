@@ -94,11 +94,20 @@ function user_favorites(int $userId, int $limit = 50): array
     return $stmt->fetchAll();
 }
 
-function report_create(string $resourceId, string $kind, string $note, ?int $userId): void
+/**
+ * 提交举报，并立刻做一次联动判定（够票自动下线 + 备用来源接管）。
+ * @return array{count:int,bad:int,auto_invalid:bool,switched:bool}
+ */
+function report_create(string $resourceId, string $kind, string $note, ?int $userId): array
 {
     db()->prepare('INSERT INTO reports(resource_id, kind, note, user_id, ip, created_at) VALUES(?,?,?,?,?,?)')
         ->execute([$resourceId, $kind, mb_substr($note, 0, 200), $userId,
             (string) ($_SERVER['REMOTE_ADDR'] ?? ''), now_iso()]);
+
+    if (function_exists('health_after_report')) {
+        return health_after_report($resourceId);
+    }
+    return ['count' => 1, 'bad' => 0, 'auto_invalid' => false, 'switched' => false];
 }
 
 function api_key_for(int $userId): string

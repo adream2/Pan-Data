@@ -5,6 +5,7 @@ require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/moderation.php';
 require_once __DIR__ . '/../src/user.php';
+require_once __DIR__ . '/../src/health.php';
 require_once __DIR__ . '/../src/settings.php';
 require_once __DIR__ . '/../src/ui.php';
 require_once __DIR__ . '/../src/promo.php';
@@ -25,9 +26,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '')
     csrf_check();
     $rid = (string) ($_POST['resource_id'] ?? '');
     if ($rid !== '' && rate_limit('report', 10, 3600)) {
-        report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''),
+        $rep = report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''),
             $currentUser !== null ? (int) $currentUser['id'] : null);
-        flash('举报已提交，感谢反馈');
+        // 自动切换到备用来源是对用户有实际意义的结果，要说出来，
+        // 否则他刷新页面看到换了平台会以为是 bug
+        if (!empty($rep['switched'])) {
+            flash('该链接已失效，已自动切换到备用来源');
+        } elseif (!empty($rep['auto_invalid'])) {
+            flash('感谢反馈，该资源已标记失效');
+        } else {
+            flash('举报已提交，感谢反馈');
+        }
     } else {
         flash('举报太频繁，稍后再试', 'err');
     }

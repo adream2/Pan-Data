@@ -31,7 +31,7 @@ SRC = ROOT / "data" / "links.jsonl"
 OUT = ROOT / "data" / "resources.json"
 SHARD_DIR = ROOT / "data" / "shards"
 INDEX = ROOT / "data" / "index.json"
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 DEFAULT_DAYS = 90
 # 热文件条数上限。90 天全量在数据涨到 20k+ 后会到 14MB，
 # 跨境拉一次要 3 分钟以上（实测 40KB/s），前端和 PHP 站都吃不消。
@@ -78,18 +78,53 @@ def within_days(row: dict, days: int) -> bool:
     return (datetime.now(timezone.utc) - posted).days <= days
 
 
-def build_resource(row: dict, siblings: list[dict]) -> dict:
-    """固定字段顺序就是契约，改顺序要升 schema_version。"""
-    mirrors = [
-        {
+# 备用链接最多保留多少条。同一部热剧可能被几百个频道转发，
+# 全塞进 mirrors 会让单条记录涨到几十 KB，热文件和详情页都吃不消；
+# 前台只展示前 6 条，留 12 条已经足够切换。
+MIRROR_LIMIT = 12
+
+
+def mirror_url_ok(url: str) -> bool:
+    """过滤抓取时被截断的残缺链接（如 https://pan.baidu.com/s/16D）。
+
+    这类 URL 打不开也切不过去，留着只会让「备用链接」变成坑。
+    """
+    if not url or not url.startswith("http"):
+        return False
+    tail = url.rstrip("/").rsplit("/", 1)[-1]
+    tail = tail.split("?")[0]
+    return len(tail) >= 6
+
+
+def build_mirrors(row: dict, siblings: list[dict]) -> list[dict]:
+    """同组的其他来源，按 URL 去重后截断。
+
+    siblings 里同一 share_url 会出现多次（多频道转发同一条时重复收录），
+    之前只排除了自己，导致 mirrors 里大量重复条目。
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+    for m in siblings:
+        url = m["share_url"]
+        if m["id"] == row["id"] or url == row["share_url"]:
+            continue
+        if url in seen or not mirror_url_ok(url):
+            continue
+        seen.add(url)
+        out.append({
             "provider": m["provider"],
-            "share_url": m["share_url"],
+            "share_url": url,
             "pwd": m.get("pwd") or None,
             "status": status_of(m),
-        }
-        for m in siblings
-        if m["id"] != row["id"] and m["share_url"] != row["share_url"]
-    ]
+        })
+        if len(out) >= MIRROR_LIMIT:
+            break
+    return out
+
+
+def build_resource(row: dict, siblings: list[dict]) -> dict:
+    """固定字段顺序就是契约，改顺序要升 schema_version。"""
+    mirrors = build_mirrors(row, siblings)
     return {
         "id": row.get("group_key") or row["id"],
         "title": best_title(row),

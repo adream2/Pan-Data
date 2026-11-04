@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/settings.php';
+require_once __DIR__ . '/alias.php';
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/schema.php';
@@ -31,6 +32,50 @@ function repo_fts_available(): bool
     return $ok;
 }
 
+/**
+ * 清洗备用链接：去重、丢掉被截断的残缺 URL、限制条数。
+ *
+ * 真实脏数据：同一部热剧被几百个频道转发，mirrors 里同一条 share_url 重复几十次，
+ * 还混着 `https://pan.baidu.com/s/16D` 这种抓取时被截断的链接。
+ * 不清洗的话「自动换源」会切到一个打不开的地址，比不切更糟。
+ */
+function repo_clean_mirrors(array $mirrors, string $selfUrl): array
+{
+    $seen = [$selfUrl => true];
+    $out = [];
+    foreach ($mirrors as $m) {
+        if (!is_array($m)) {
+            continue;
+        }
+        $url = trim((string) ($m['share_url'] ?? ''));
+        if ($url === '' || !preg_match('#^https?://#i', $url)) {
+            continue;
+        }
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $path = preg_replace('#\?.*$#', '', trim($path, '/')) ?? '';
+        $tail = $path !== '' ? basename($path) : '';
+        // 分享 id 普遍 8 位以上；少于 6 位基本是被截断的残链
+        if (mb_strlen($tail) < 6) {
+            continue;
+        }
+        if (isset($seen[$url])) {
+            continue;
+        }
+        $seen[$url] = true;
+        $out[] = [
+            'provider'  => (string) ($m['provider'] ?? 'unknown'),
+            'share_url' => $url,
+            'pwd'       => ($m['pwd'] ?? null) !== null && $m['pwd'] !== '' ? (string) $m['pwd'] : null,
+            'status'    => in_array((string) ($m['status'] ?? ''), ['valid', 'invalid', 'unchecked'], true)
+                ? (string) $m['status'] : 'unchecked',
+        ];
+        if (count($out) >= 12) {
+            break;
+        }
+    }
+    return $out;
+}
+
 /** 把仓库的 resources.json 条目写进本地库（幂等）。 */
 function repo_upsert(array $r, string $origin = 'repo'): string
 {
@@ -39,7 +84,7 @@ function repo_upsert(array $r, string $origin = 'repo'): string
         return 'skip';
     }
     $title = trim((string) ($r['title'] ?? '')) ?: (string) $r['share_url'];
-    $mirrors = $r['mirrors'] ?? [];
+    $mirrors = repo_clean_mirrors((array) ($r['mirrors'] ?? []), (string) $r['share_url']);
     $row = [
         ':id'         => $id,
         ':title'      => mb_substr($title, 0, 200),
@@ -85,6 +130,7 @@ function repo_upsert(array $r, string $origin = 'repo'): string
         db()->prepare('INSERT INTO resources_fts(id, title, core_title, desc) VALUES(?,?,?,?)')
             ->execute([$id, $row[':title'], $row[':core_title'], $row[':desc']]);
     }
+    repo_mark_dirty();
     return $isNew ? 'insert' : 'update';
 }
 
@@ -215,13 +261,33 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
     };
 
     $kw = trim((string) ($f['q'] ?? ''));
+    $aliasHits = [];
+    $aliasExpanded = false;
     if ($kw !== '') {
-        $terms = preg_split('/\s+/u', $kw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        if (mb_strlen($kw) >= 3 && repo_fts_available()) {
+        $terms = array_slice(preg_split('/\s+/u', $kw, -1, PREG_SPLIT_NO_EMPTY) ?: [], 0, 6);
+        $plan = alias_plan($kw);
+        $aliasHits = $plan['hits'];
+        $aliasExpanded = $plan['expanded'];
+
+        // trigram 分词要求每个词至少 3 个字符，否则 FTS 永远 0 命中
+        // （搜「ps」「三体」这类短词必须回退 LIKE，不然名字里有却搜不到）
+        $ftsOk = repo_fts_available() && mb_strlen($kw) >= 3;
+        foreach ($terms as $t) {
+            if (mb_strlen($t) < 3) {
+                $ftsOk = false;
+                break;
+            }
+        }
+
+        if ($ftsOk) {
             $join = 'JOIN resources_fts f ON f.id = r.id';
-            $quoted = array_map(fn($t) => '"' . str_replace('"', '""', $t) . '"', $terms);
+            $parts = [];
+            foreach ($plan['terms'] as [$t, $variants]) {
+                $quoted = array_map(fn($v) => '"' . str_replace('"', '""', $v) . '"', $variants);
+                $parts[] = count($quoted) > 1 ? '(' . implode(' OR ', $quoted) . ')' : $quoted[0];
+            }
             $where[] = 'resources_fts MATCH :fts';
-            $params[':fts'] = implode(' AND ', $quoted);
+            $params[':fts'] = implode(' AND ', $parts);
             // 默认按相关度；用户显式选了排序就以排序为主，相关度退为次级
             $order = match ($sort) {
                 'sources' => 'r.sources DESC, bm25(resources_fts, 8.0, 4.0, 1.0) ASC',
@@ -229,9 +295,14 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
                 default   => 'bm25(resources_fts, 8.0, 4.0, 1.0) ASC, r.posted_at DESC',
             };
         } else {
-            foreach ($terms as $i => $t) {
-                $where[] = "(r.title LIKE :lk{$i} OR r.core_title LIKE :lk{$i} OR r.desc LIKE :lk{$i})";
-                $params[":lk{$i}"] = '%' . $t . '%';
+            foreach ($plan['terms'] as $i => [, $variants]) {
+                $ors = [];
+                foreach ($variants as $j => $v) {
+                    $key = ':lk' . $i . '_' . $j;
+                    $ors[] = "r.title LIKE {$key} OR r.core_title LIKE {$key} OR COALESCE(r.desc, '') LIKE {$key}";
+                    $params[$key] = '%' . $v . '%';
+                }
+                $where[] = '(' . implode(' OR ', $ors) . ')';
             }
         }
     }
@@ -278,7 +349,41 @@ function repo_search(array $f, int $page = 1, int $per = 20): array
         'pages' => max(1, (int) ceil($total / $per)),
         'per'   => $per,
         'sort'  => $sort,
+        // 别名词典命中的词，用于前端提示「PS 也匹配 Photoshop」
+        'alias_hits'     => $aliasHits,
+        'alias_expanded' => $aliasExpanded,
     ];
+}
+
+/** 快速判断一条查询是否有结果（无结果页给建议用，避免推荐过去又是一个空页） */
+function repo_has_results(string $q): bool
+{
+    $r = repo_search(['q' => $q], 1, 1);
+    return (int) $r['total'] > 0;
+}
+
+/**
+ * 极轻量的存在性探测：只扫 title / core_title，不做 FTS、不排序。
+ * 无结果页与详情页要在几十毫秒内验证几个候选词，用 repo_search 太重（每次都算 COUNT + 排序）。
+ *
+ * 多词按 AND 处理：搜「蛊降 2026」时标题里写的是「蛊降(2026)」，
+ * 拿整串去 LIKE 一定落空，必须拆词分别判。
+ */
+function repo_probe(string $q): bool
+{
+    $terms = array_slice(preg_split('/\s+/u', trim($q), -1, PREG_SPLIT_NO_EMPTY) ?: [], 0, 4);
+    if ($terms === []) {
+        return false;
+    }
+    $stmt = db()->prepare('SELECT 1 FROM resources WHERE hidden = 0
+        AND (title LIKE ? OR core_title LIKE ?) LIMIT 1');
+    foreach ($terms as $t) {
+        $stmt->execute(['%' . $t . '%', '%' . $t . '%']);
+        if ($stmt->fetchColumn() === false) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function repo_get(string $id): ?array
@@ -293,24 +398,101 @@ function repo_get(string $id): ?array
     return $row;
 }
 
-function repo_stats(): array
+/* ------------------------------------------------------------------ */
+/* 轻量缓存                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 统计类查询全是全表 GROUP BY，一次首页要跑 10 几条，实测 250ms 起步。
+ * 数据每 30 分钟才同步一次，60 秒缓存完全不影响新鲜度，但能把首屏打下来。
+ * 导入/巡检写完库后调 repo_cache_flush() 立即失效。
+ */
+function repo_cache_dir(): string
 {
+    return APP_ROOT . '/storage/cache';
+}
+
+function repo_cache_read(string $key, int $ttl): ?array
+{
+    if ($ttl <= 0) {
+        return null;
+    }
+    $f = repo_cache_dir() . '/' . $key . '.json';
+    if (!is_file($f) || time() - (int) filemtime($f) >= $ttl) {
+        return null;
+    }
+    $d = json_decode((string) @file_get_contents($f), true);
+    return is_array($d) ? $d : null;
+}
+
+function repo_cache_write(string $key, array $data): void
+{
+    @mkdir(repo_cache_dir(), 0775, true);
+    @file_put_contents(repo_cache_dir() . '/' . $key . '.json',
+        json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+
+function repo_cache_flush(): void
+{
+    foreach (glob(repo_cache_dir() . '/*.json') ?: [] as $f) {
+        @unlink($f);
+    }
+}
+
+/**
+ * 标记「库已变」。批量导入会调上千次 upsert，不能每次都清缓存，
+ * 所以只置脏标记，进程退出时清一次。
+ */
+function repo_mark_dirty(): void
+{
+    $GLOBALS['__repo_dirty'] = true;
+    static $registered = false;
+    if (!$registered) {
+        $registered = true;
+        register_shutdown_function(static function (): void {
+            if (!empty($GLOBALS['__repo_dirty'])) {
+                repo_cache_flush();
+            }
+        });
+    }
+}
+
+function repo_stats(bool $fresh = false): array
+{
+    if (!$fresh && ($c = repo_cache_read('stats', 60)) !== null) {
+        return $c;
+    }
     $pdo = db();
     $out = [];
-    $out['total'] = (int) $pdo->query('SELECT COUNT(*) FROM resources WHERE hidden = 0')->fetchColumn();
+
+    // 一次 GROUP BY 拿到总数与状态分布，省掉 3 次全表 COUNT
+    $statusRows = $pdo->query('SELECT status, COUNT(*) c FROM resources WHERE hidden = 0
+        GROUP BY status ORDER BY c DESC')->fetchAll();
+    $byStatus = [];
+    foreach ($statusRows as $r) {
+        $byStatus[(string) $r['status']] = (int) $r['c'];
+    }
+    $out['by_status'] = $statusRows;
+    $out['total'] = array_sum($byStatus);
+    $out['valid'] = $byStatus['valid'] ?? 0;
+    $out['invalid'] = $byStatus['invalid'] ?? 0;
     $out['hidden'] = (int) $pdo->query('SELECT COUNT(*) FROM resources WHERE hidden = 1')->fetchColumn();
-    $out['today'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE substr(posted_at,1,10) = date('now')")->fetchColumn();
     $out['pending'] = (int) $pdo->query("SELECT COUNT(*) FROM submissions WHERE status = 'pending'")->fetchColumn();
-    $out['today_invalid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'invalid'
-        AND substr(COALESCE(checked_at, updated_at), 1, 10) = date('now')")->fetchColumn();
-    $out['valid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'valid'")->fetchColumn();
-    $out['invalid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources WHERE hidden = 0 AND status = 'invalid'")->fetchColumn();
+
+    // 用范围比较而不是 substr()：substr 是函数，索引直接废掉，全表扫
+    $out['today'] = (int) $pdo->query("SELECT COUNT(*) FROM resources
+        WHERE posted_at >= date('now') AND posted_at < date('now', '+1 day')")->fetchColumn();
+    $out['today_invalid'] = (int) $pdo->query("SELECT COUNT(*) FROM resources
+        WHERE hidden = 0 AND status = 'invalid'
+          AND COALESCE(checked_at, updated_at) >= date('now')")->fetchColumn();
+
     $out['by_type'] = $pdo->query("SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type
         ORDER BY CASE type WHEN 'other' THEN 1 ELSE 0 END, c DESC")->fetchAll();
     $out['by_provider'] = $pdo->query('SELECT provider, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY provider ORDER BY c DESC')->fetchAll();
-    $out['by_status'] = $pdo->query("SELECT status, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY status ORDER BY c DESC")->fetchAll();
     $out['months'] = $pdo->query("SELECT substr(posted_at,1,7) m, COUNT(*) c FROM resources WHERE posted_at IS NOT NULL
         GROUP BY m ORDER BY m DESC LIMIT 18")->fetchAll();
+
+    repo_cache_write('stats', $out);
     return $out;
 }
 
@@ -324,6 +506,11 @@ function repo_stats(): array
  */
 function repo_facets(array $base = []): array
 {
+    $cacheKey = 'facets_' . md5((string) json_encode($base));
+    if (($cached = repo_cache_read($cacheKey, 60)) !== null) {
+        return $cached;
+    }
+
     $where = ['hidden = 0'];
     $params = [];
     if (($base['type'] ?? '') !== '') {
@@ -338,12 +525,14 @@ function repo_facets(array $base = []): array
     $stmt = db()->prepare("SELECT provider, COUNT(*) c FROM resources WHERE {$whereSql} GROUP BY provider ORDER BY c DESC");
     $stmt->execute($params);
 
-    return [
+    $out = [
         'types'     => db()->query("SELECT type, COUNT(*) c FROM resources WHERE hidden = 0 GROUP BY type
         ORDER BY CASE type WHEN 'other' THEN 1 ELSE 0 END, c DESC")->fetchAll(),
         'providers' => $stmt->fetchAll(),
         'years'     => db()->query('SELECT year, COUNT(*) c FROM resources WHERE hidden = 0 AND year IS NOT NULL GROUP BY year ORDER BY year DESC LIMIT 12')->fetchAll(),
     ];
+    repo_cache_write($cacheKey, $out);
+    return $out;
 }
 
 /**

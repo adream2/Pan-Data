@@ -5,7 +5,7 @@
 | 项 | 值 |
 |---|---|
 | 入口 | `data` 分支：`data/index.json` → `data/resources.json`（热） / `data/shards/*.json`（库存） |
-| 当前版本 | `1.2` |
+| 当前版本 | `1.3` |
 | 生成方 | `tools/export.py`（每次采集/巡检后自动重跑，默认 90 天窗口） |
 | 编码 | UTF-8，紧凑 JSON（`--pretty` 可缩进） |
 
@@ -42,7 +42,7 @@
 | `id` | string | 否 | 资源指纹（core_title+season 的 sha1 前 12 位），同作品不同集数共用 |
 | `title` | string | 否 | 展示标题，优先网盘官方标题；占位标题会退回 `core_title` |
 | `core_title` | string | 否 | 归一化标题（已剥 `更至X集`／`4K`／`【国漫】` 等） |
-| `type` | string | 否 | `movie` / `music` / `ebook` / `software` / `course` / `other` |
+| `type` | string | 否 | `movie` / `course` / `game` / `software` / `ebook` / `music` / `other` |
 | `year` | int | 是 | 原始标题里的年份，**不可靠**（常是搬运年份），仅作展示/弱筛选 |
 | `season` | int | 是 | 第几季，如 `2` |
 | `episode` | int | 是 | 已更新到第几集（取一组内的最大值） |
@@ -68,11 +68,20 @@
 | `pwd` | string 或 null | 提取码 |
 | `status` | string | 该备用链接的巡检状态 |
 
+**1.3 起的约束**（调用方可以依赖）：
+
+- **按 `share_url` 去重**，也不会包含自身的主链接。1.2 及之前只排除了自己，
+  同一链接被多频道转发时会在 mirrors 里重复几十次。
+- **不超过 12 条**（`MIRROR_LIMIT`）。热剧被几百个频道转发时，全量塞进来会让单条记录涨到几十 KB。
+- **不含被截断的残链**。抓取有时会截出 `https://pan.baidu.com/s/16D` 这种路径尾段不足 6 字符的地址，
+  打不开也没法切换，一律丢弃。
+
 ## 调用语义
 
 - **只展示 `status != "invalid"` 的资源**。`unchecked` 表示还没巡检，不等于坏链。
 - 一个 `id` 只出现一次，同作品的旧集数已被收敛进 `episode` / `mirrors`。
-- `mirrors` 非空时建议给用户「换一个盘」入口：夸克失效换百度。
+- `mirrors` 非空时建议给用户「换一个盘」入口：夸克失效换百度；也可以像本站一样做「主链接失效后自动把可用镜像提升为主链接」。
+- 展示 `mirrors` 时**再过滤一次 `status != "invalid"`**：镜像的巡检时间可能早于主链接，标了失效的不要给用户，点了还是打不开。
 - 排序直接用数组顺序（`posted_at` 倒序），不要再二次排序。
 - **热文件 = 最近 90 天里最新的 8000 条**（`period.capped` 会标出窗口内总数与实际保留数）。
   被截掉的不丢，都在分片里；分片才是全量。

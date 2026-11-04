@@ -8,7 +8,16 @@
  */
 $href = (string) $row['share_url'];
 $pwd = (string) ($row['pwd'] ?? '');
-$allMirrors = $row['mirrors'] ?? [];
+// 已明确失效的备用链接不展示：列出来用户点进去还是打不开，等于误导。
+// 有效在前、未检在后，跟采集端分组优先级一致。
+$allMirrors = array_values(array_filter($row['mirrors'] ?? [], static function ($m) {
+    return is_array($m) && (string) ($m['status'] ?? 'unchecked') !== 'invalid'
+        && (string) ($m['share_url'] ?? '') !== '';
+}));
+usort($allMirrors, static function (array $a, array $b): int {
+    $rank = static fn(array $m): int => (string) ($m['status'] ?? 'unchecked') === 'valid' ? 0 : 1;
+    return $rank($a) <=> $rank($b);
+});
 $meta = ui_meta($row);
 $landingSlug = seo_landing_slug_for_type((string) $row['type']);
 $landingSpec = $landingSlug !== null ? seo_landing($landingSlug) : null;
@@ -47,6 +56,14 @@ $landingSpec = $landingSlug !== null ? seo_landing($landingSlug) : null;
 
     <!-- 主操作 -->
     <div class="p-5 sm:p-6">
+      <?php if ((string) $row['status'] === 'invalid'): ?>
+        <div class="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800 ring-1 ring-amber-200">
+          <svg class="mt-0.5 size-4 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 3 2.5 16h15L10 3Z"/><path d="M10 8v3.5M10 13.5v.5"/></svg>
+          <span>当前主链接已失效。
+            <?= $allMirrors !== [] ? '请改用下方的备用链接，或等待系统自动换源。' : '我们正在巡检，暂时没有可用来源。' ?>
+          </span>
+        </div>
+      <?php endif; ?>
       <div class="flex flex-wrap items-center gap-3">
         <a class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 text-sm font-medium text-white transition hover:bg-blue-700"
            href="<?= e($href) ?>" target="_blank" rel="nofollow noopener">
@@ -201,6 +218,25 @@ $landingSpec = $landingSlug !== null ? seo_landing($landingSlug) : null;
               · <?= e(ui_rel_time($r['posted_at'])) ?>
             </span>
           </span>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <?php
+  // 相关搜索：只给实测有结果的词，别让用户再点进一个空页
+  $relatedSearches = function_exists('ui_related_searches') ? ui_related_searches($row, 4) : [];
+  ?>
+  <?php if (count($relatedSearches) > 1): ?>
+  <section class="mt-6" aria-label="相关搜索">
+    <h2 class="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">再搜一下</h2>
+    <div class="flex flex-wrap gap-2 px-1">
+      <?php foreach ($relatedSearches as $rs): ?>
+        <a class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs text-gray-600 shadow-sm ring-1 ring-gray-200/80 transition hover:text-blue-600 hover:ring-blue-200"
+           href="/search?q=<?= e(urlencode((string) $rs['q'])) ?>">
+          <svg class="size-3 text-gray-300" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="6"/><path d="m13.5 13.5 3.5 3.5"/></svg>
+          <?= e((string) $rs['label']) ?>
         </a>
       <?php endforeach; ?>
     </div>

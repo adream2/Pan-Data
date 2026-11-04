@@ -5,6 +5,7 @@ require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/repo.php';
 require_once __DIR__ . '/../src/user.php';
 require_once __DIR__ . '/../src/seo.php';
+require_once __DIR__ . '/../src/health.php';
 
 session_name((string) cfg('security.session_name', 'pansou_sid'));
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
@@ -53,14 +54,20 @@ if ($action !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $added = user_favorite((int) $user['id'], $rid);
                 flash($added ? '已加入收藏' : '已取消收藏');
             }
-            redirect('/detail?id=' . urlencode($rid));
+            redirect(seo_detail_path($rid));
         case 'report':
             $rid = (string) ($_POST['resource_id'] ?? '');
             if ($rid !== '') {
-                report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''), (int) $user['id']);
-                flash('举报已提交，感谢反馈');
+                $rep = report_create($rid, (string) ($_POST['kind'] ?? 'invalid'), (string) ($_POST['note'] ?? ''), (int) $user['id']);
+                if (!empty($rep['switched'])) {
+                    flash('该链接已失效，已自动切换到备用来源');
+                } elseif (!empty($rep['auto_invalid'])) {
+                    flash('感谢反馈，该资源已标记失效');
+                } else {
+                    flash('举报已提交，感谢反馈');
+                }
             }
-            redirect('/detail?id=' . urlencode($rid));
+            redirect(seo_detail_path($rid));
     }
 }
 

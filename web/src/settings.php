@@ -33,6 +33,9 @@ function cfg_spec(): array
             'kind' => 'text', 'def' => 'movie,course,ebook,software,music'],
         'review_notify_admin' => ['group' => 'review', 'label' => '新投稿提醒', 'desc' => '概览页待审红点（始终显示），此项控制是否在投稿被自动拒绝时记录', 'kind' => 'select',
             'def' => '1', 'options' => ['1' => '在待审红点中提示', '0' => '不额外提示']],
+        'report_auto_invalid' => ['group' => 'review', 'label' => '举报自动判失效阈值', 'desc' => '同一资源被几个不同 IP 举报「失效」就自动标记失效；0 = 只人工处理', 'kind' => 'int', 'def' => '2'],
+        'report_auto_switch' => ['group' => 'review', 'label' => '失效后自动换源', 'desc' => '标记失效时，若存在其他平台的备用链接，自动把它提升为主链接', 'kind' => 'select',
+            'def' => '1', 'options' => ['1' => '自动切换', '0' => '不切换']],
         // ---- 搜索与展示 ----
         'search_page_size' => ['group' => 'search', 'label' => '每页条数', 'desc' => '前台列表分页', 'kind' => 'int', 'def' => '20'],
         'search_hot_words' => ['group' => 'search', 'label' => '热门搜索条数', 'desc' => '首页"大家在搜"，0 = 隐藏', 'kind' => 'int', 'def' => '7'],
@@ -40,6 +43,9 @@ function cfg_spec(): array
             'def' => '1', 'options' => ['1' => '展示（带失效标记）', '0' => '隐藏']],
         'show_unchecked' => ['group' => 'search', 'label' => '展示未巡检链接', 'desc' => '关闭后只展示巡检有效的资源', 'kind' => 'select',
             'def' => '1', 'options' => ['1' => '展示', '0' => '只看有效']],
+        'search_alias_on' => ['group' => 'search', 'label' => '同义词扩展', 'desc' => '搜「复联」也能搜到「复仇者联盟」，搜「PS」也能搜到 Photoshop；关闭则只按字面匹配', 'kind' => 'select',
+            'def' => '1', 'options' => ['1' => '开启', '0' => '关闭']],
+        'search_alias_extra' => ['group' => 'search', 'label' => '自定义同义词', 'desc' => '每行一组，逗号分隔，组内互为别名。例：扫黑风暴,反黑风暴', 'kind' => 'textarea', 'def' => ''],
         // ---- 拉新 ----
         'promo_open' => ['group' => 'promo', 'label' => '拉新总开关', 'desc' => '关闭后拉新 tab 与转存按钮全部隐藏', 'kind' => 'select',
             'def' => '0', 'options' => ['0' => '关闭', '1' => '开启']],
@@ -146,7 +152,7 @@ function cfg_save(array $post): array
             $raw = (string) min(99999, (int) $raw);
         }
         if ($meta['kind'] === 'textarea') {
-            $raw = mb_substr($raw, 0, 1000);
+            $raw = mb_substr($raw, 0, 3000);
         } elseif ($meta['kind'] === 'text') {
             $raw = mb_substr($raw, 0, 120);
         }

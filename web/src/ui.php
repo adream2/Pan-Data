@@ -277,6 +277,108 @@ function ui_provider_color(string $p): string
     return UI_PROVIDERS[$p][2][0] ?? '#94a3b8';
 }
 
+/**
+ * 从标题里剥出「作品本体名」，去掉季、集、画质、字幕这些附属信息。
+ * 「伟大的长征(2026） 更新至45集」-> 「伟大的长征」
+ */
+function ui_core_subject(string $title): string
+{
+    $t = ui_clean_title($title);
+    // 括注里的年份：「伟大的长征(2026）」——年份单独拼，留在主名里会变成「XX 2026 2026」
+    $t = preg_replace('/[（(【\[]\s*(?:19|20)\d{2}\s*[）)】\]]?/u', '', $t) ?? $t;
+    // 季 / 集 / 话 / 期（季要认中文数字：第一季、第二季）
+    $t = preg_replace('/[（(【\[]?\s*(?:全|更至|更新至|共|已更新)\s*\d+\s*[集话期]\s*[）)】\]]?/u', '', $t) ?? $t;
+    $t = preg_replace('/[（(【\[]?\s*\d+\s*[集话]\s*(?:全|完)?\s*[）)】\]]/u', '', $t) ?? $t;
+    $t = preg_replace('/(第\s*[0-9一二三四五六七八九十]+\s*[季部]|Season\s*\d+|S\d{1,2}\b)/iu', '', $t) ?? $t;
+    // 画质 / 编码 / 片源（英文）
+    $t = preg_replace('/\b(?:4K|8K|2160P|1080P|720P|60FPS|HDR10?|DoVi|DV|WEB-DL|WEBRip|BluRay|BDRip|REMUX|HEVC|x264|x265|AAC|DDP|H264)\b/iu', '', $t) ?? $t;
+    // 中文附属词
+    $t = preg_replace('/(国语|粤语|英语|日语|韩语|中字|中文字幕|双语|中英字幕|内嵌|外挂|无删减|未删减|导演剪辑|加长版|高清|超清|蓝光|原盘|合集|完结|全本|完整版)/u', '', $t) ?? $t;
+    // 收尾：多重分隔符压成一个空格
+    $t = preg_replace('/[\s\x{3000}·\-—_|｜\/\\\,，、（）()【】\[\]]+/u', ' ', $t) ?? $t;
+    return trim($t);
+}
+
+/**
+ * 详情页「相关搜索」。
+ *
+ * 用户常常是从搜索结果点进某一条，真正想找的是「这部剧还有别的版本吗」。
+ * 给他几个能再搜的词，比让他回搜索框重新想要有效得多。
+ *
+ * 只输出实测有结果的词——给一个点了还是空页的链接，比不给更伤。
+ *
+ * @return array<int,array{q:string,label:string}>
+ */
+function ui_related_searches(array $row, int $limit = 4): array
+{
+    $base = ui_core_subject((string) ($row['core_title'] ?? ''));
+    if (mb_strlen($base) < 2 || mb_strlen($base) > 24) {
+        $base = ui_core_subject((string) ($row['title'] ?? ''));
+    }
+    if (mb_strlen($base) < 2 || mb_strlen($base) > 24) {
+        return [];
+    }
+
+    $out = [];
+    $add = static function (string $q) use (&$out): void {
+        $q = trim($q);
+        if ($q === '') {
+            return;
+        }
+        foreach ($out as $o) {
+            if ($o['q'] === $q) {
+                return;
+            }
+        }
+        $out[] = ['q' => $q, 'label' => $q];
+    };
+
+    // 主名本身一定命中（当前这条就在结果里），放在第一位
+    $add($base);
+
+    $type = (string) ($row['type'] ?? 'other');
+    $candidates = [];
+    if ($type === 'movie') {
+        if ((int) ($row['episode'] ?? 0) > 0) {
+            $candidates[] = $base . ' 全集';
+        }
+        if (!empty($row['season'])) {
+            $candidates[] = $base . ' 第' . (int) $row['season'] . '季';
+        }
+        if (!empty($row['year'])) {
+            $candidates[] = $base . ' ' . (int) $row['year'];
+        }
+        $candidates[] = $base . ' 4K';
+    } elseif ($type === 'course') {
+        $candidates[] = $base . ' 完整版';
+        $candidates[] = $base . ' 课件';
+    } elseif ($type === 'ebook') {
+        $candidates[] = $base . ' 全集';
+        $candidates[] = $base . ' epub';
+    } elseif ($type === 'software') {
+        $candidates[] = $base . ' 破解';
+        $candidates[] = $base . ' 教程';
+    } elseif ($type === 'music') {
+        $candidates[] = $base . ' 无损';
+        $candidates[] = $base . ' flac';
+    } elseif ($type === 'game') {
+        $candidates[] = $base . ' 中文';
+        $candidates[] = $base . ' 免安装';
+    }
+
+    foreach ($candidates as $c) {
+        if (count($out) >= $limit) {
+            break;
+        }
+        if (function_exists('repo_probe') && !repo_probe($c)) {
+            continue;
+        }
+        $add($c);
+    }
+
+    return array_slice($out, 0, $limit);
+}
+
 /** 分页条。$base 允许分类落地页（/movie 等）复用同一套分页组件 */
 function ui_pager(int $page, int $pages, array $query, string $base = '/search'): string
 {

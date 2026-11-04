@@ -60,10 +60,42 @@ function admin_extra_actions(string $action): bool
                 ->execute([$status, (int) ($_POST['id'] ?? 0)]);
             $rid = (string) ($_POST['resource_id'] ?? '');
             if ($status === 'resolved' && $rid !== '') {
-                db()->prepare("UPDATE resources SET status = 'invalid', updated_at = ? WHERE id = ?")
-                    ->execute([now_iso(), $rid]);
+                db()->prepare("UPDATE resources SET status = 'invalid', checked_at = ?, updated_at = ? WHERE id = ?")
+                    ->execute([now_iso(), now_iso(), $rid]);
+                // 只标失效太浪费：mirrors 里往往躺着同内容的另一个平台链接
+                $switched = function_exists('health_promote_mirror') && health_promote_mirror($rid);
+                flash($switched ? '已标记失效，并切换到备用来源' : '已标记失效并处理');
+            } else {
+                flash($status === 'resolved' ? '已处理' : '已忽略该举报');
             }
-            flash($status === 'resolved' ? '已标记失效并处理' : '已忽略该举报');
+            redirect('/admin.php?r=reports');
+        case 'report_requeue':
+            $rid = (string) ($_POST['resource_id'] ?? '');
+            if ($rid !== '') {
+                health_requeue($rid);
+                db()->prepare("UPDATE reports SET status = 'resolved' WHERE resource_id = ? AND status = 'open'")
+                    ->execute([$rid]);
+                flash('已重新排队，等下次巡检复核');
+            }
+            redirect('/admin.php?r=reports');
+        case 'report_ignore_all':
+            $rid = (string) ($_POST['resource_id'] ?? '');
+            if ($rid !== '') {
+                db()->prepare("UPDATE reports SET status = 'rejected' WHERE resource_id = ? AND status = 'open'")
+                    ->execute([$rid]);
+                flash('已忽略该资源的全部待处理举报');
+            }
+            redirect('/admin.php?r=reports');
+        case 'report_invalidate':
+            $rid = (string) ($_POST['resource_id'] ?? '');
+            if ($rid !== '') {
+                db()->prepare("UPDATE resources SET status = 'invalid', checked_at = ?, updated_at = ? WHERE id = ?")
+                    ->execute([now_iso(), now_iso(), $rid]);
+                db()->prepare("UPDATE reports SET status = 'resolved' WHERE resource_id = ? AND status = 'open'")
+                    ->execute([$rid]);
+                $switched = health_promote_mirror($rid);
+                flash($switched ? '已标记失效，并切换到备用来源' : '已标记失效');
+            }
             redirect('/admin.php?r=reports');
         case 'bulk_import':
             [$ok, $skip, $bad] = bulk_import_lines((string) ($_POST['lines'] ?? ''));
@@ -204,38 +236,56 @@ function admin_extra_body(string $route): string
                 . '</table></section></div>';
 
         case 'reports':
+            $queueRows = function_exists('health_review_queue') ? health_review_queue(40) : [];
+            $queue = h_admin_report_queue(40);
             $rows = db()->query("SELECT r.*, s.title FROM reports r LEFT JOIN resources s ON s.id = r.resource_id
-                WHERE r.status = 'open' ORDER BY r.id DESC LIMIT 100")->fetchAll();
+                WHERE r.status = 'open' ORDER BY r.id DESC LIMIT 60")->fetchAll();
+            $open = count($rows);
             $tr = '';
             foreach ($rows as $r) {
                 $tr .= '<tr class="border-b border-neutral-100 last:border-0">'
-                    . '<td class="px-4 py-3"><div class="text-[13px] font-medium">' . e((string) ($r['title'] ?? $r['resource_id'])) . '</div>'
+                    . '<td class="px-4 py-2.5"><div class="text-[13px]">' . e(mb_substr((string) ($r['title'] ?? $r['resource_id']), 0, 30)) . '</div>'
                     . '<div class="font-mono text-[11px] text-neutral-400">' . e((string) $r['resource_id']) . '</div></td>'
-                    . '<td class="px-4 py-3 text-xs text-neutral-500">' . e((string) $r['kind']) . '</td>'
-                    . '<td class="px-4 py-3 text-[11px] text-neutral-400">' . e((string) ($r['note'] ?? '')) . '</td>'
-                    . '<td class="px-4 py-3 font-mono text-[11px] text-neutral-400">' . e(substr((string) $r['created_at'], 0, 16)) . '</td>'
-                    . '<td class="px-4 py-3"><div class="flex gap-1">'
+                    . '<td class="px-4 py-2.5 text-xs text-neutral-500">' . e(h_kind_label((string) $r['kind'])) . '</td>'
+                    . '<td class="px-4 py-2.5 text-[11px] text-neutral-400">' . e((string) ($r['note'] ?? '')) . '</td>'
+                    . '<td class="px-4 py-2.5 font-mono text-[11px] text-neutral-400">' . e(substr((string) $r['created_at'], 0, 16)) . '</td>'
+                    . '<td class="px-4 py-2.5"><div class="flex gap-1">'
                     . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
                     . '<input type="hidden" name="action" value="report_handle"><input type="hidden" name="status" value="resolved">'
                     . '<input type="hidden" name="id" value="' . (int) $r['id'] . '"><input type="hidden" name="resource_id" value="' . e((string) $r['resource_id']) . '">'
-                    . '<button class="rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">失效并下架</button></form>'
+                    . '<button class="rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">标失效</button></form>'
                     . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
                     . '<input type="hidden" name="action" value="report_handle"><input type="hidden" name="status" value="rejected">'
                     . '<input type="hidden" name="id" value="' . (int) $r['id'] . '">'
                     . '<button class="rounded-md bg-white px-2 py-1 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">忽略</button></form>'
                     . '</div></td></tr>';
             }
-            $open = count($rows);
-            return '<div class="mb-4 flex items-center gap-2 text-xs text-neutral-500">'
-                . '<span class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">待处理 ' . $open . '</span>'
-                . '<span>处理「失效」会自动把资源标记为 invalid</span></div>'
+
+            $hint = '<div class="mb-4 flex flex-wrap items-center gap-2 text-xs text-neutral-500">'
+                . '<span class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">待处理举报 ' . $open . '</span>'
+                . '<span class="rounded-full bg-white px-2.5 py-1 ring-1 ring-neutral-200">待复核资源 ' . count($queueRows) . '</span>'
+                . '<span>独立 IP 举报达 <b>' . (int) cfg_get_int('report_auto_invalid') . '</b> 条会自动标记失效'
+                . (cfg_get_bool('report_auto_switch') ? '，并自动切换到备用来源' : '（备用来源切换已关闭）')
+                . '；0 表示只人工处理</span></div>';
+
+            $queueHtml = '<div class="mt-6 overflow-hidden rounded-lg bg-white shadow-sm">'
+                . '<div class="border-b border-neutral-100 px-4 py-3 text-sm font-semibold">按资源汇总 · 待复核</div>'
+                . '<table class="w-full text-left"><thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-neutral-400"><tr>'
+                . '<th class="px-4 py-2 font-medium">资源</th><th class="px-4 py-2 font-medium">当前状态</th>'
+                . '<th class="px-4 py-2 font-medium">举报</th><th class="px-4 py-2 font-medium">备用源</th>'
+                . '<th class="px-4 py-2 font-medium">最近</th><th class="px-4 py-2 font-medium">操作</th></tr></thead><tbody>'
+                . ($queue ?: '<tr><td colspan="6" class="px-4 py-10 text-center text-sm text-neutral-400">没有待复核的资源</td></tr>')
+                . '</tbody></table></div>';
+
+            return $hint
                 . '<div class="overflow-hidden rounded-lg bg-white shadow-sm"><table class="w-full text-left">'
                 . '<thead class="bg-slate-800 text-[11px] uppercase tracking-wide text-white"><tr>'
                 . '<th class="px-4 py-2.5 font-medium">资源</th><th class="px-4 py-2.5 font-medium">类型</th>'
                 . '<th class="px-4 py-2.5 font-medium">备注</th><th class="px-4 py-2.5 font-medium">时间</th>'
                 . '<th class="px-4 py-2.5 font-medium">处理</th></tr></thead><tbody>'
                 . ($tr ?: '<tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-400">没有待处理举报</td></tr>')
-                . '</tbody></table></div>';
+                . '</tbody></table></div>'
+                . $queueHtml;
 
         case 'bulk':
             return '<div class="grid gap-5 lg:grid-cols-3">'
@@ -255,6 +305,75 @@ function admin_extra_body(string $route): string
                 . '</aside></div>';
     }
     return '';
+}
+
+/** 举报类型的中文名，后台不该直接显示 invalid / wrong */
+function h_kind_label(string $kind): string
+{
+    return [
+        'invalid' => '链接失效',
+        'wrong'   => '内容不符',
+        'illegal' => '违规内容',
+        'other'   => '其它',
+    ][$kind] ?? $kind;
+}
+
+/**
+ * 待复核队列（按资源聚合）。
+ *
+ * 单条举报列表看不出「这条被 5 个人报坏了」这种信号，还得人工数。
+ * 这里聚合成资源维度，并把 mirrors 里还能用的备用源数量算出来——
+ * 决定点「标失效」还是「换源重排」就看这个数。
+ */
+function h_admin_report_queue(int $limit = 40): string
+{
+    $rows = function_exists('health_review_queue') ? health_review_queue($limit) : [];
+    if ($rows === []) {
+        return '';
+    }
+    $html = '';
+    foreach ($rows as $r) {
+        $mirrors = json_decode((string) ($r['mirrors_json'] ?? '[]'), true) ?: [];
+        $usable = function_exists('health_mirror_candidates') ? count(health_mirror_candidates($mirrors)) : 0;
+        $status = (string) $r['status'];
+        $badge = match ($status) {
+            'valid'   => '<span class="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">有效</span>',
+            'invalid' => '<span class="rounded bg-rose-50 px-1.5 py-0.5 text-[11px] text-rose-700">已失效</span>',
+            default   => '<span class="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500">未巡检</span>',
+        };
+        $bad = (int) $r['bad'];
+        $badCls = $bad >= 2 ? 'bg-rose-50 text-rose-700 ring-rose-200'
+            : ($bad >= 1 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-neutral-50 text-neutral-500 ring-neutral-200');
+
+        $csrf = csrf_token();
+        $rid = e((string) $r['id']);
+        $op = '<div class="flex flex-wrap gap-1">'
+            . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . $csrf . '">'
+            . '<input type="hidden" name="action" value="report_invalidate"><input type="hidden" name="resource_id" value="' . $rid . '">'
+            . '<button class="rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">'
+            . ($usable > 0 ? '标失效并换源' : '标失效') . '</button></form>'
+            . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . $csrf . '">'
+            . '<input type="hidden" name="action" value="report_requeue"><input type="hidden" name="resource_id" value="' . $rid . '">'
+            . '<button class="rounded-md bg-white px-2 py-1 text-[11px] text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50">重排复核</button></form>'
+            . '<form method="post" class="inline"><input type="hidden" name="_csrf" value="' . $csrf . '">'
+            . '<input type="hidden" name="action" value="report_ignore_all"><input type="hidden" name="resource_id" value="' . $rid . '">'
+            . '<button class="rounded-md bg-white px-2 py-1 text-[11px] text-neutral-400 ring-1 ring-neutral-200 hover:bg-neutral-50">忽略</button></form>'
+            . '</div>';
+
+        $html .= '<tr class="border-b border-neutral-100 last:border-0">'
+            . '<td class="px-4 py-2.5"><div class="text-[13px]">'
+            . '<a class="hover:text-blue-600" target="_blank" href="/s/' . e(urlencode((string) $r['id'])) . '">'
+            . e(mb_substr((string) $r['title'], 0, 34)) . '</a></div>'
+            . '<div class="font-mono text-[11px] text-neutral-400">' . e((string) $r['provider']) . ' · ' . e((string) $r['id']) . '</div></td>'
+            . '<td class="px-4 py-2.5">' . $badge . '</td>'
+            . '<td class="px-4 py-2.5"><span class="rounded px-1.5 py-0.5 text-[11px] ring-1 ' . $badCls . '">'
+            . $bad . ' 人报坏 / 共 ' . (int) $r['reports'] . ' 条</span></td>'
+            . '<td class="px-4 py-2.5 text-[11px] ' . ($usable > 0 ? 'text-emerald-600' : 'text-neutral-300') . '">'
+            . ($usable > 0 ? $usable . ' 个可用' : '无') . '</td>'
+            . '<td class="px-4 py-2.5 font-mono text-[11px] text-neutral-400">' . e(substr((string) $r['last_at'], 0, 16)) . '</td>'
+            . '<td class="px-4 py-2.5">' . $op . '</td></tr>';
+    }
+    return $html;
 }
 
 /** 概览页增强：今日/昨日环比 + 热搜 + 热门资源 */
