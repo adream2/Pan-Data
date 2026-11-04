@@ -1,9 +1,15 @@
 <?php
 declare(strict_types=1);
 
-// 命令行同步，适合放 crontab：
-//   每 30 分钟   php /path/to/web/bin/sync.php hot
-//   每天 04:05   php /path/to/web/bin/sync.php shard 2026-10
+// 命令行同步，适合放 crontab。
+//
+// 日常只需要这一条（每 30 分钟）：
+//   php /path/to/web/bin/sync.php auto
+// 首次部署想强制全量：
+//   php /path/to/web/bin/sync.php all
+//
+// auto 会拿 index.json 跟上次的记录比对，只下载真正变化的热文件和分片；
+// 数据没变化时一次请求都不发（只读 index.json 就退出）。
 // 注意：cron 表达式别写进块注释，里面的星号加斜杠会提前闭合注释。
 
 require_once __DIR__ . '/../src/bootstrap.php';
@@ -27,7 +33,10 @@ try {
 
         case 'hot':
             $stat = repo_import_hot();
-            fwrite(STDOUT, sprintf("热文件导入：新增 %d，更新 %d，跳过 %d\n", $stat['insert'], $stat['update'], $stat['skip']));
+            fwrite(STDOUT, sprintf(
+                "热文件导入：新增 %d，更新 %d，未变 %d，跳过 %d\n",
+                $stat['insert'], $stat['update'], $stat['same'] ?? 0, $stat['skip']
+            ));
             break;
 
         case 'shard':
@@ -37,8 +46,17 @@ try {
                 exit(1);
             }
             $stat = repo_import_shard($id);
-            fwrite(STDOUT, sprintf("分片 %s 导入：新增 %d，更新 %d\n", $id, $stat['insert'], $stat['update']));
+            fwrite(STDOUT, sprintf(
+                "分片 %s 导入：新增 %d，更新 %d，未变 %d\n",
+                $id, $stat['insert'], $stat['update'], $stat['same'] ?? 0
+            ));
             break;
+
+        case 'auto':
+            // 增量：只拉变化的热文件与分片，cron 每 30 分钟跑一次
+            $r = repo_auto_sync(0);
+            fwrite(STDOUT, $r['message'] . PHP_EOL);
+            exit($r['ok'] ? 0 : 1);
 
         case 'all':
             // 首次部署用：热文件只保留最近 8000 条，历史在分片里，
@@ -81,7 +99,7 @@ try {
             break;
 
         default:
-            fwrite(STDERR, '用法：php bin/sync.php [index|hot|all|shard <id>]' . PHP_EOL);
+            fwrite(STDERR, '用法：php bin/sync.php [index|hot|auto|all|shard <id>]' . PHP_EOL);
             exit(1);
     }
 } catch (Throwable $e) {

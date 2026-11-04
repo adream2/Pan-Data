@@ -294,12 +294,96 @@ mirrors 生成时只排除了自己，没按 URL 去重，也没过滤抓取时�
 并发别调太高：所有 worker 共用一个出口 IP 和同一个网盘账号，夸克会对单账号限流
 （429 / 41031）。4-6 是安全区间，12 是上限。
 
-## 定时任务
+## 上线后：数据怎么自动入库
+
+采集跑在 GitHub Actions（每 30 分钟一次，推到 `data` 分支），PHP 站是纯消费者。
+线上唯一要做的事：让服务器定时把新数据拉进本地库。
+
+### 为什么必须做增量
+
+全量 = 热文件 6.1MB + 29 个分片 18.5MB ≈ **24.6MB**，跨境拉一次十分钟起步，
+而且其中 99% 是已经导过的同一批数据。实测每轮真正变化的只有几十到几百条。
+
+`sync.php auto` 的做法：
+
+1. 先拉 `index.json`（几 KB）。它带 `generated_at`，以及每个分片的 `resources` / `bytes`。
+2. 跟 `storage/sync_state.json` 里上次的快照比对：
+   - `generated_at` 一样且分片都没变 → **一次下载都不发**，直接退出
+   - 热文件 `bytes` 变了才拉热文件
+   - 分片只有 `resources` 或 `bytes` 变了才拉（历史分片通常永远不用再拉）
+3. 导入时先逐字段比对内容，完全一致就跳过（`same`），只有真变了才写库和 FTS 索引。
+
+```bash
+cd /srv/pansou/web
+
+php bin/sync.php index    # 只看仓库有什么，不写库
+php bin/sync.php auto     # 增量同步（cron 用这个）
+php bin/sync.php all      # 强制全量，首次部署或怀疑数据缺失时用
+php bin/sync.php hot      # 只拉热文件
+php bin/sync.php shard 2026-10
+```
+
+| 场景 | 请求数 | 数据量 | 耗时 |
+|---|---|---|---|
+| 数据没更新 | 1（只读 index.json） | 几 KB | < 1s |
+| 常规一轮（热文件 + 本月分片） | 3 | 6~8 MB | 30~60s |
+| 首次部署（29 分片 + 热文件） | 30 | 24.6 MB | 10~15 分钟 |
+
+### crontab
 
 ```cron
-*/30 * * * * php /srv/pansou/web/bin/sync.php hot   >> /var/log/pansou.log 2>&1
-5    4 * * * php /srv/pansou/web/bin/sync.php shard 2026-10 >> /var/log/pansou.log 2>&1
+# 采集在 :07 和 :37 推送，这里错开 8 分钟，避免拉到正在写的半成品
+15,45 * * * * cd /srv/pansou/web && php bin/sync.php auto >> /var/log/pansou-sync.log 2>&1
 ```
+
+首次部署：
+
+```bash
+cd /srv/pansou/web
+php bin/sync.php all    # 一次性灌完 29 个分片
+# 之后交给 cron，或者先手动跑一次 auto 确认输出正常
+php bin/sync.php auto
+```
+
+### 三个容易踩的坑（都已经处理）
+
+**① 同步期间前台会卡。** 原来一个事务包几千条，写锁一直攥着，
+前台点详情触发的点击统计会 `busy_timeout` 等 5 秒然后报错。
+现在改成每 500 条一个事务，单次持锁几百毫秒；统计写入也做了静默失败，不会因为统计写不进去而 500。
+
+**② 重复导入特别慢。** 每条 upsert 要重写主表和 FTS 索引，实测 17ms/条，
+7700 条就是两分钟。现在先比对 18 个字段，一致就跳过：
+**7691 条从 124 秒降到 0.2 秒**，只有真正变化的条目才付写入代价。
+
+**③ 两个 cron 撞一起。** `storage/sync.lock` + `flock(LOCK_EX|LOCK_NB)`，
+上一轮没跑完时下一轮打印「跳过本次」直接退出，不会两个进程同时写库。
+
+另外失败是自愈的：某个分片下载失败不会写入 state，下一轮自动重试；
+只有整轮都成功才会更新 `generated_at`，所以不会因为一次网络抖动就永久漏掉数据。
+
+### 怎么确认它在工作
+
+```bash
+# 1) 最近一次同步的结果与耗时
+cat web/storage/sync_state.json
+# {"generated_at":"2026-11-04T14:19:44+00:00","hot_bytes":6393712,
+#  "shards":{"2026-11":{...}},"last_run":"2026-11-04T14:50:12+08:00"}
+
+# 2) 后台「概览」的今日入库数，或直接查日志表
+php -r 'require "web/src/bootstrap.php"; require "web/src/repo.php";
+foreach (db()->query("SELECT created_at,ok,message,stats_json FROM logs WHERE kind=\"sync_auto\" ORDER BY id DESC LIMIT 5") as $r) echo $r["created_at"]," ",$r["stats_json"],"
+";'
+```
+
+状态文件里的 `last_run` 停住不动，就是 cron 没跑起来或者 PHP 路径不对。
+
+### 拉不动 GitHub 怎么办
+
+后台「设置 → 数据源」里有**拉取代理**和**拉取 Token**：
+
+- 服务器在境内、`api.github.com` 不通 → 填 `http://127.0.0.1:7890` 之类的代理
+- 不想被匿名限流（60 次/小时）→ 填 token（5000 次/小时）。增量同步一轮 3 次请求，
+  匿名额度其实也够，但首次全量要 30 次，配个 token 更稳。
 
 ## 功能
 

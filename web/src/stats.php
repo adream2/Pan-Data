@@ -11,9 +11,14 @@ declare(strict_types=1);
 /** 资源详情点击（按天聚合，供后台看热门） */
 function click_track(string $resourceId): void
 {
-    $day = gmdate('Y-m-d');
-    db()->prepare('INSERT INTO clicks(resource_id, day, count) VALUES(?,?,1)
-        ON CONFLICT(resource_id, day) DO UPDATE SET count = count + 1')->execute([$resourceId, $day]);
+    try {
+        $day = gmdate('Y-m-d');
+        db()->prepare('INSERT INTO clicks(resource_id, day, count) VALUES(?,?,1)
+            ON CONFLICT(resource_id, day) DO UPDATE SET count = count + 1')->execute([$resourceId, $day]);
+    } catch (Throwable $e) {
+        // 统计是附属功能：同步任务正好在写库时可能拿不到锁，
+        // 不能因为「少记一次点击」把整个详情页打成 500
+    }
 }
 
 function click_count(string $resourceId): int
@@ -30,9 +35,13 @@ function search_track(string $q): void
     if ($q === '') {
         return;
     }
-    $day = gmdate('Y-m-d');
-    db()->prepare('INSERT INTO search_logs(q, day, count) VALUES(?,?,1)
-        ON CONFLICT(q, day) DO UPDATE SET count = count + 1')->execute([$q, $day]);
+    try {
+        $day = gmdate('Y-m-d');
+        db()->prepare('INSERT INTO search_logs(q, day, count) VALUES(?,?,1)
+            ON CONFLICT(q, day) DO UPDATE SET count = count + 1')->execute([$q, $day]);
+    } catch (Throwable $e) {
+        // 同上：搜索词热度记不上就算了，不能影响搜索结果页
+    }
 }
 
 function top_searches(int $days = 7, int $limit = 10): array

@@ -50,6 +50,15 @@ if ($action !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             admin_logout();
             redirect('/admin.php?r=login');
 
+        case 'sync_auto':
+            // 后台按钮只做热文件 + 最多 2 个分片：web 请求有超时限制，
+            // 完整的增量（首次可能 29 个分片）交给 cron 里的 bin/sync.php auto
+            @set_time_limit(0);
+            $r = repo_auto_sync(2);
+            flash(str_replace("
+", '；', $r['message']), $r['ok'] ? 'ok' : 'err');
+            redirect('/admin.php?r=sync');
+
         case 'sync_hot':
             try {
                 $stat = repo_import_hot();
@@ -444,7 +453,34 @@ switch ($route) {
         }
         $ghConfigured = (string) repo_conf('github_token', '') !== '';
 
-        $body = '<div class="grid gap-5 lg:grid-cols-2">'
+        $state = repo_sync_state();
+        $lastRun = (string) ($state['last_run'] ?? '');
+        $dataVersion = (string) ($state['generated_at'] ?? '');
+        $dbTotal = (int) db()->query('SELECT COUNT(*) FROM resources')->fetchColumn();
+        $autoBar = '<section class="mb-5 rounded-lg bg-white p-5 shadow-sm">'
+            . '<div class="flex flex-wrap items-start justify-between gap-3">'
+            . '<div class="min-w-0">'
+            . '<h2 class="text-sm font-semibold">自动同步（增量）</h2>'
+            . '<p class="mt-1 text-xs leading-relaxed text-neutral-500">'
+            . '线上靠 cron 每 30 分钟跑一次 <code class="rounded bg-neutral-100 px-1">php bin/sync.php auto</code>：'
+            . '先读 index.json 比对，只下载变化的热文件与分片，内容一致的条目不重写库。'
+            . '数据没更新时只发 1 次请求。</p>'
+            . '<p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-400">'
+            . '<span>上次同步 <span class="text-neutral-600">' . ($lastRun !== '' ? e(ui_rel_time($lastRun) ?: $lastRun) : '从未') . '</span></span>'
+            . '<span>数据版本 <span class="font-mono text-neutral-600">' . ($dataVersion !== '' ? e(substr($dataVersion, 0, 16)) : '—') . '</span></span>'
+            . '<span>库内 <span class="tabular-nums text-neutral-600">' . number_format($dbTotal) . '</span> 条</span>'
+            . '</p>'
+            . '<p class="mt-2 text-[11px] text-neutral-400">建议 cron：'
+            . '<code class="rounded bg-neutral-50 px-1 ring-1 ring-neutral-200">15,45 * * * * cd /path/to/web &amp;&amp; php bin/sync.php auto</code>'
+            . '</p>'
+            . '</div>'
+            . '<form method="post" class="shrink-0"><input type="hidden" name="_csrf" value="' . csrf_token() . '">'
+            . '<input type="hidden" name="action" value="sync_auto">'
+            . '<button class="btn" type="submit">立即同步</button>'
+            . '<p class="mt-1 text-[10px] text-neutral-400">热文件 + 最多 2 个分片</p></form>'
+            . '</div></section>';
+
+        $body = $autoBar . '<div class="grid gap-5 lg:grid-cols-2">'
             . '<section class="rounded-lg bg-white p-5 shadow-sm">'
             . '<h2 class="text-sm font-semibold">仓库导入</h2>'
             . '<p class="mt-1 text-xs text-neutral-500">从数据仓库拉热文件，覆盖最近 90 天。'

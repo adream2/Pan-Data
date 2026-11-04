@@ -76,6 +76,34 @@ function repo_clean_mirrors(array $mirrors, string $selfUrl): array
     return $out;
 }
 
+/**
+ * 该资源与库里已有内容是否完全一致。
+ *
+ * 热文件和分片里绝大部分条目每轮都没变（只是同一批数据被重新导出），
+ * 但 upsert 会重写主表和 FTS 索引，实测 17ms/条 —— 同步 7700 条要两分多钟，
+ * 而且这段时间一直占着数据库写锁，前台的点击统计和举报会被卡住。
+ * 先比对再写，能省掉绝大部分开销。
+ */
+function repo_row_same(array $old, array $row): bool
+{
+    $map = [
+        'title' => ':title', 'core_title' => ':core_title', 'type' => ':type',
+        'year' => ':year', 'season' => ':season', 'episode' => ':episode',
+        'complete' => ':complete', 'provider' => ':provider', 'share_url' => ':share_url',
+        'pwd' => ':pwd', 'status' => ':status', 'checked_at' => ':checked_at',
+        'sources' => ':sources', 'mirrors_json' => ':mirrors', 'channel' => ':channel',
+        'post_url' => ':post_url', 'posted_at' => ':posted_at', 'desc' => ':desc',
+    ];
+    foreach ($map as $col => $key) {
+        $a = $old[$col] === null ? '' : (string) $old[$col];
+        $b = $row[$key] === null ? '' : (string) $row[$key];
+        if ($a !== $b) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /** 把仓库的 resources.json 条目写进本地库（幂等）。 */
 function repo_upsert(array $r, string $origin = 'repo'): string
 {
@@ -109,9 +137,16 @@ function repo_upsert(array $r, string $origin = 'repo'): string
         ':ts'         => now_iso(),
     ];
 
-    $exists = db()->prepare('SELECT id FROM resources WHERE id = ?');
+    $exists = db()->prepare('SELECT title, core_title, type, year, season, episode, complete,
+            provider, share_url, pwd, status, checked_at, sources, mirrors_json, channel,
+            post_url, posted_at, desc FROM resources WHERE id = ?');
     $exists->execute([$id]);
-    $isNew = $exists->fetchColumn() === false;
+    $old = $exists->fetch();
+    $isNew = $old === false;
+
+    if (!$isNew && repo_row_same($old, $row)) {
+        return 'same';
+    }
 
     $sql = $isNew
         ? 'INSERT INTO resources(id,title,core_title,type,year,season,episode,complete,provider,share_url,pwd,status,
@@ -134,23 +169,36 @@ function repo_upsert(array $r, string $origin = 'repo'): string
     return $isNew ? 'insert' : 'update';
 }
 
+/**
+ * 批量导入。
+ *
+ * 分批提交（每 500 条一个事务）而不是一个事务包几千条：
+ * 大事务会把整个导入期间的数据库写锁一直攥着，前台的点击统计、举报写入
+ * 只能等着（busy_timeout 5 秒），体验就是「同步一开始，站就卡」。
+ * 分批后单次持锁只有几百毫秒，而且中途失败也不会丢掉已经写好的部分——
+ * upsert 本身幂等，重跑就能补齐。
+ */
 function repo_import_payload(array $payload, string $origin): array
 {
     $items = $payload['resources'] ?? [];
-    $stat = ['insert' => 0, 'update' => 0, 'skip' => 0, 'total' => count($items)];
-    db()->beginTransaction();
-    try {
-        foreach ($items as $item) {
-            if (!is_array($item)) {
-                $stat['skip']++;
-                continue;
+    $stat = ['insert' => 0, 'update' => 0, 'same' => 0, 'skip' => 0, 'total' => count($items)];
+    $pdo = db();
+    $batch = 500;
+    for ($offset = 0; $offset < count($items); $offset += $batch) {
+        $pdo->beginTransaction();
+        try {
+            foreach (array_slice($items, $offset, $batch) as $item) {
+                if (!is_array($item)) {
+                    $stat['skip']++;
+                    continue;
+                }
+                $stat[repo_upsert($item, $origin)]++;
             }
-            $stat[repo_upsert($item, $origin)]++;
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
         }
-        db()->commit();
-    } catch (Throwable $e) {
-        db()->rollBack();
-        throw $e;
     }
     return $stat;
 }
@@ -236,6 +284,172 @@ function repo_import_shard(string $shardId): array
     $stat = repo_import_payload($payload, 'shard:' . $shardId);
     repo_log('import_shard', true, '导入分片 ' . $shardId, $stat);
     return $stat;
+}
+
+/* ------------------------------------------------------------------ */
+/* 增量同步                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 上次同步到的快照，用来判断哪些文件真的变了。
+ * 落在 storage/ 下（不进版本库），每台机器的进度各自独立。
+ */
+function repo_sync_state_path(): string
+{
+    return APP_ROOT . '/storage/sync_state.json';
+}
+
+function repo_sync_state(): array
+{
+    $path = repo_sync_state_path();
+    $state = is_file($path) ? json_decode((string) @file_get_contents($path), true) : null;
+    if (!is_array($state)) {
+        $state = [];
+    }
+    return $state + ['generated_at' => '', 'hot_bytes' => 0, 'shards' => []];
+}
+
+function repo_sync_state_save(array $state): void
+{
+    @mkdir(dirname(repo_sync_state_path()), 0775, true);
+    @file_put_contents(repo_sync_state_path(),
+        json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+
+/**
+ * 增量同步：只下载真正变化的热文件与分片。
+ *
+ * 全量 24.6MB（热文件 6MB + 29 个分片 18.5MB），跨境拉一次十分钟起步，
+ * 而每轮真正变化的只有几十到几百条。所以：
+ *   1. 先读 index.json（几 KB），拿 generated_at 与每个分片的 resources/bytes
+ *   2. 跟上次快照比对，没变就不下载
+ *   3. 导入时逐字段比对，内容一致就跳过写库
+ *
+ * @param int $maxShards 本轮最多处理几个分片（0=不限）。
+ *                      后台按钮在 web 请求里跑，传小值避免把请求拖到超时。
+ * @return array{ok:bool,requests:int,insert:int,update:int,same:int,total:int,
+ *               shards:array<int,string>,skipped:bool,message:string}
+ */
+function repo_auto_sync(int $maxShards = 0): array
+{
+    $out = ['ok' => true, 'requests' => 0, 'insert' => 0, 'update' => 0, 'same' => 0,
+        'total' => 0, 'shards' => [], 'skipped' => false, 'message' => ''];
+
+    // 单实例：上一轮没跑完就跳过，避免两个进程同时写库
+    $lockFile = APP_ROOT . '/storage/sync.lock';
+    @mkdir(dirname($lockFile), 0775, true);
+    $lock = fopen($lockFile, 'c');
+    if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+        $out['skipped'] = true;
+        $out['message'] = '上一轮同步仍在运行，跳过本次';
+        return $out;
+    }
+
+    $started = microtime(true);
+    $state = repo_sync_state();
+    $index = repo_index();
+    $out['requests']++;
+    if ($index === null) {
+        $out['ok'] = false;
+        $out['message'] = '拉取 index.json 失败（检查网络 / 代理 / Token）';
+        return $out;
+    }
+
+    $generatedAt = (string) ($index['generated_at'] ?? '');
+    $hotBytes = (int) ($index['hot']['bytes'] ?? 0);
+
+    $todo = [];
+    foreach ((array) ($index['shards'] ?? []) as $s) {
+        $id = (string) ($s['id'] ?? '');
+        if ($id === '' || !preg_match('/^\d{4}-(\d{2}|Q[1-4])$/', $id)) {
+            continue;
+        }
+        $cur = ['resources' => (int) ($s['resources'] ?? 0), 'bytes' => (int) ($s['bytes'] ?? 0)];
+        $prev = $state['shards'][$id] ?? null;
+        if ($prev === null
+            || (int) ($prev['resources'] ?? -1) !== $cur['resources']
+            || (int) ($prev['bytes'] ?? -1) !== $cur['bytes']) {
+            $todo[$id] = $cur;
+        }
+    }
+    $hotChanged = $hotBytes !== (int) $state['hot_bytes'];
+
+    if ($generatedAt === $state['generated_at'] && !$hotChanged && $todo === []) {
+        $out['skipped'] = true;
+        $out['message'] = '数据无变化（导出于 ' . ($generatedAt !== '' ? $generatedAt : '未知') . '）';
+        return $out;
+    }
+
+    $isFirstRun = $state['generated_at'] === '';
+    $lines = [];
+    $lines[] = sprintf('%s导出于 %s：热文件%s，待同步分片 %d 个',
+        $isFirstRun ? '首次运行，' : '',
+        $generatedAt !== '' ? $generatedAt : '未知',
+        $hotChanged ? '有更新' : '无变化',
+        count($todo));
+
+    if ($hotChanged) {
+        $payload = repo_fetch_json('resources.json');
+        $out['requests']++;
+        if ($payload === null) {
+            $out['ok'] = false;
+            $lines[] = '热文件下载失败';
+        } else {
+            $st = repo_import_payload($payload, 'repo');
+            $out['insert'] += $st['insert'];
+            $out['update'] += $st['update'];
+            $out['same'] += $st['same'];
+            $out['total'] += $st['total'];
+            $state['hot_bytes'] = $hotBytes;
+            $lines[] = sprintf('热文件 %d 条：新增 %d，更新 %d，未变 %d',
+                $st['total'], $st['insert'], $st['update'], $st['same']);
+        }
+    }
+
+    if ($maxShards > 0) {
+        $todo = array_slice($todo, 0, $maxShards, true);
+    }
+    foreach ($todo as $id => $cur) {
+        try {
+            $payload = repo_fetch_json('shards/' . $id . '.json');
+            $out['requests']++;
+            if ($payload === null) {
+                throw new RuntimeException('下载失败');
+            }
+            $st = repo_import_payload($payload, 'shard:' . $id);
+            $out['insert'] += $st['insert'];
+            $out['update'] += $st['update'];
+            $out['same'] += $st['same'];
+            $out['total'] += $st['total'];
+            $out['shards'][] = $id;
+            $state['shards'][$id] = $cur;
+            $lines[] = sprintf('分片 %-9s %d 条：新增 %d，更新 %d，未变 %d',
+                $id, $st['total'], $st['insert'], $st['update'], $st['same']);
+        } catch (Throwable $e) {
+            // 失败的分片不写状态，下次自动重试
+            $out['ok'] = false;
+            $lines[] = sprintf('分片 %-9s 失败：%s', $id, $e->getMessage());
+        }
+    }
+
+    if ($out['ok']) {
+        $state['generated_at'] = $generatedAt;
+    }
+    $state['last_run'] = date('c');
+    repo_sync_state_save($state);
+
+    $elapsed = microtime(true) - $started;
+    $dbTotal = (int) db()->query('SELECT COUNT(*) FROM resources')->fetchColumn();
+    repo_log('sync_auto', $out['ok'], '自动同步', [
+        'requests' => $out['requests'], 'insert' => $out['insert'], 'update' => $out['update'],
+        'shards' => count($out['shards']), 'seconds' => round($elapsed, 1), 'total' => $dbTotal,
+    ]);
+
+    $lines[] = sprintf('%s：%d 次请求，新增 %d，更新 %d，耗时 %.1fs，库内 %d 条',
+        $out['ok'] ? '完成' : '部分失败（未变化的分片下次重试）',
+        $out['requests'], $out['insert'], $out['update'], $elapsed, $dbTotal);
+    $out['message'] = implode("\n", $lines);
+    return $out;
 }
 
 /** 搜索。返回 ['items'=>[], 'total'=>int, 'pages'=>int, 'page'=>int] */
