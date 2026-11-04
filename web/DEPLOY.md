@@ -51,6 +51,26 @@ Nginx 的 `root` 指向 **`public/`**，不是包根目录 —— `src/` 和 `st
 
 ## 2. Web 服务器
 
+### 两件必须做的事
+
+**① 站点根目录要指向 `public/`，不是包根目录。**
+
+包根下除了 `public/`，还有 `src/`（配置、可能带 Token）和 `storage/`（SQLite 数据库）。
+根目录指错的话，这两样都能被直接在浏览器里下载 —— 数据库里有管理员密码 hash
+和网盘 Cookie，等于把后台送人。
+
+自检：浏览器打开下面两个地址，**都应该返回 403 / 404**，如果下载下来文件就是配错了：
+
+```
+https://你的域名/storage/app.sqlite
+https://你的域名/src/config.php
+```
+
+**② 必须配伪静态（重写规则）。**
+
+`/movie`、`/s/xxx`、`/c/频道名`、`/updates` 都是「虚拟路径」，磁盘上没有对应文件。
+不配重写，只有首页 `/` 能打开（它默认落到 `index.php`），点任何分类或详情都是 404。
+
 ### Nginx
 
 ```nginx
@@ -101,6 +121,47 @@ server {
 ```
 
 再把 DocumentRoot 指到 `/srv/pansou/public`。
+
+**宝塔 / aaPanel**：站点设置 → 网站目录 → **运行目录** 选 `public`（等价于改 root），
+再到「伪静态」里把上面的 `location` 段贴进去。只改运行目录不配伪静态，分类页照样 404。
+
+### 如果面板强制要求根目录
+
+有些面板不允许把运行目录设成子目录。那就保持 root 为包根，但要在 location 级覆盖，
+并且屏蔽敏感目录做双保险：
+
+```nginx
+server {
+    listen 80;
+    server_name pansou.example.com;
+    root /srv/pansou;            # 面板给的是包根
+
+    # 下面每个 location 都把根指回 public
+    location / {
+        root /srv/pansou/public;
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /robots.txt          { rewrite ^ /robots.php last; }
+    location = /sitemap.xml         { rewrite ^ /sitemap.php?kind=index last; }
+    location = /sitemap-core.xml    { rewrite ^ /sitemap.php?kind=core last; }
+    location ~ ^/sitemap-res-([0-9]+)\.xml$ { rewrite ^ /sitemap.php?kind=res&n=$1 last; }
+
+    location ~ \.php$ {
+        root /srv/pansou/public;
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_read_timeout 300;
+    }
+
+    # 双保险：上面万一写漏，这里也不让下载
+    location ~ ^/(src|storage|bin)/ { deny all; }
+    location ~ \.(sqlite|sqlite-wal|sqlite-shm)$ { deny all; }
+}
+```
+
+改完务必用前面那两个 URL 复测一遍。
 
 ---
 

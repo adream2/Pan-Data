@@ -95,6 +95,34 @@ function installer_env_checks(): array
         'note' => $fts ? '' : '没有也能用，搜索会降级成 LIKE 模糊匹配（大库下变慢）',
     ];
 
+    // Web 根目录必须是 public/。指到包根的话，storage/app.sqlite（管理员密码 hash、
+    // 网盘 Cookie）和 src/config.local.php 都能被直接下载，这是最要命的一种部署错误
+    $docRoot = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+    $publicDir = realpath(APP_ROOT . '/public');
+    $actualRoot = $docRoot !== '' ? realpath($docRoot) : false;
+    if ($docRoot === '' || $actualRoot === false || $publicDir === false) {
+        $checks[] = [
+            'name' => 'Web 根目录',
+            'ok' => true,
+            'value' => '无法判断',
+            'need' => '应为 public/',
+            'level' => 'warn',
+            'note' => '命令行下没有 DOCUMENT_ROOT，跳过该项',
+        ];
+    } else {
+        $rootOk = $actualRoot === $publicDir;
+        $checks[] = [
+            'name' => 'Web 根目录指向 public',
+            'ok' => $rootOk,
+            'value' => $rootOk ? '正确' : '指向了 ' . $actualRoot,
+            'need' => '必须',
+            'level' => 'error',
+            'note' => $rootOk
+                ? ''
+                : '把站点根目录改成 ' . $publicDir . '，否则 src/ 与 storage/ 可被直接下载',
+        ];
+    }
+
     $css = APP_ROOT . '/public/assets/app.css';
     $checks[] = [
         'name' => '前端样式文件',
