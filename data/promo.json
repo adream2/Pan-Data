@@ -1,0 +1,673 @@
+{
+  "version": 1,
+  "items": {
+    "cfbd27aa6c34": {
+      "id": "cfbd27aa6c34",
+      "title": "虎爷养学霸课程系列入门到进阶完整资源",
+      "core_title": "虎爷养学霸课程系列入门到进阶完整资源",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/687524c28184",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T14:30:17+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "approved",
+      "added_at": "2026-11-02T15:38:07+00:00",
+      "approved_at": "2026-11-02T15:38:18+00:00",
+      "note": ""
+    },
+    "a476f2d6f929": {
+      "id": "a476f2d6f929",
+      "title": "定制LoRA模型训练进阶课：微调与实战全流程",
+      "core_title": "定制LoRA模型训练进阶课：微调与实战全流程",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/115fa1563f9c",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T14:00:34+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "approved",
+      "added_at": "2026-11-02T15:38:07+00:00",
+      "approved_at": "2026-11-02T15:38:18+00:00",
+      "note": ""
+    },
+    "7b9f17c3c353": {
+      "id": "7b9f17c3c353",
+      "title": "【无损FLAC格式】2026年10月30日发行的151张新专辑",
+      "core_title": "无损FLAC格式 2026年10月30日发行的151张新专辑",
+      "type": "music",
+      "source_url": "https://pan.quark.cn/s/458571234ee3",
+      "source_pwd": null,
+      "channel": "leoziyuan",
+      "posted_at": "2026-11-02T13:02:08+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "c0a386db5e95": {
+      "id": "c0a386db5e95",
+      "title": "AI古画动起来视频号老项目变现完整课程",
+      "core_title": "AI古画动起来视频号老项目变现完整课程",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/9bb3388ddfd2",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T13:00:58+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "8b57828db9ee": {
+      "id": "8b57828db9ee",
+      "title": "通透人生哲学教程：见天地、见众生、见自己完整版",
+      "core_title": "通透人生哲学教程：见天地、见众生、见自己",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/67242c868fec",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T12:00:40+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "f8bca294c28e": {
+      "id": "f8bca294c28e",
+      "title": "PC游戏深海超越 Beyond Blue 官方中文v1.7.17798|容量11.2GB|单机学习版",
+      "core_title": "PC游戏深海超越 Beyond Blue 官方中文v1.7.17798|容量11.2GB|单机学习版",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/246080e4d679",
+      "source_pwd": null,
+      "channel": "allgamegod",
+      "posted_at": "2026-11-02T12:00:33+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "980099aef589": {
+      "id": "980099aef589",
+      "title": "构建企业级AI大脑 大模型微调+高级RAG架构+智能Agent开发与项目实战",
+      "core_title": "构建企业级AI大脑 大模型微调+高级RAG架构+智能Agent开发与项目实战",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/03f617f3cfd2",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T11:30:23+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "65e827afc319": {
+      "id": "65e827afc319",
+      "title": "落叶楼阅读 V1.0.4纯净版：免登录支持小说漫画双读，全网热门资源免费畅享，无广告纯净阅读神器",
+      "core_title": "落叶楼阅读 V1.0.4纯净版：免登录支持小说漫画双读，全网热门资源免费畅享，无广告纯净阅读神器",
+      "type": "ebook",
+      "source_url": "https://pan.quark.cn/s/bc8e93f9a0ec",
+      "source_pwd": null,
+      "channel": "softwaregods",
+      "posted_at": "2026-11-02T10:30:19+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "e0465c80583b": {
+      "id": "e0465c80583b",
+      "title": "知识星球个人IP打造系列课程",
+      "core_title": "知识星球个人IP打造系列课程",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/89c9f7c7ad2b",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T10:30:15+00:00",
+      "risk": {
+        "level": "medium",
+        "reasons": [
+          "命中提醒词：知识星球"
+        ]
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "425a8f7f79d6": {
+      "id": "425a8f7f79d6",
+      "title": "雅客先生《Excel系统课：轻松实现Excel小白到高手的进阶》",
+      "core_title": "雅客先生《Excel系统课：轻松实现Excel小白到高手的进阶",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/c4714ed224a6",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T10:00:58+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "df605cbafa2f": {
+      "id": "df605cbafa2f",
+      "title": "CCleaner 安卓系统清理优化及隐私保护软件，专业版",
+      "core_title": "CCleaner 安卓系统清理优化及隐私保护软件，专业版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/44ad3182151a",
+      "source_pwd": null,
+      "channel": "softwaregods",
+      "posted_at": "2026-11-02T09:30:15+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "ba2c6c64eb87": {
+      "id": "ba2c6c64eb87",
+      "title": "《永隔一江水》（azw3+epub+mobi+pdf)",
+      "core_title": "永隔一江水",
+      "type": "ebook",
+      "source_url": "https://pan.quark.cn/s/5c65be811c13",
+      "source_pwd": null,
+      "channel": "okpojie",
+      "posted_at": "2026-11-02T09:00:04+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "31660d5d9c39": {
+      "id": "31660d5d9c39",
+      "title": "Microsoft Office 最新系列安装包大全解锁版",
+      "core_title": "Microsoft Office 最新系列安装包大全解锁版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/5f340dfa6873",
+      "source_pwd": null,
+      "channel": "softwaregods",
+      "posted_at": "2026-11-02T08:30:20+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "dae8fb193fd8": {
+      "id": "dae8fb193fd8",
+      "title": "AI磁力圈《0基础到人工智能大神教程》",
+      "core_title": "AI磁力圈《0基础到人工智能大神教程",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/671c1f712a93",
+      "source_pwd": null,
+      "channel": "freekecheng",
+      "posted_at": "2026-11-02T08:30:18+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "06b6191c0c00": {
+      "id": "06b6191c0c00",
+      "title": "《高水平对外开放》（azw3+epub+mobi+pdf)",
+      "core_title": "高水平对外开放",
+      "type": "ebook",
+      "source_url": "https://pan.quark.cn/s/53fbcf52bca8",
+      "source_pwd": null,
+      "channel": "okpojie",
+      "posted_at": "2026-11-02T08:30:02+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "c5c0905909dd": {
+      "id": "c5c0905909dd",
+      "title": "#软件 / 软件名称 ] 天机 六爻 排盘 1.5 . 2 高级 版",
+      "core_title": "#软件 / 软件名称 天机 六爻 排盘 1.5 . 2 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/3c9ee6ba0809",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:09:31+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "548afff2e735": {
+      "id": "548afff2e735",
+      "title": "#软件 / 软件名称 ] 千问 输入法 1.1 . 40.1060",
+      "core_title": "#软件 / 软件名称 千问 输入法 1.1 . 40.1060",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/f21b44e0bed0",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:09:01+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "0e1486713bae": {
+      "id": "0e1486713bae",
+      "title": "#软件 / 软件名称 ] 万兴 PDF 专家   v6.1 . 21 高级 版",
+      "core_title": "#软件 / 软件名称 万兴 PDF 专家 v6.1 . 21 高级 版",
+      "type": "ebook",
+      "source_url": "https://pan.quark.cn/s/af28fea92942",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:08:20+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "ad236798894e": {
+      "id": "ad236798894e",
+      "title": "#软件 / 软件名称 ] 抖 仙人 1.6 . 0 更新   ★ 抖音 增强 xp 模块",
+      "core_title": "#软件 / 软件名称 抖 仙人 1.6 . 0 更新 抖音 增强 xp 模块",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/47e7e01d6671",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:08:10+00:00",
+      "risk": {
+        "level": "medium",
+        "reasons": [
+          "命中提醒词：激活"
+        ]
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "71b258d55a8a": {
+      "id": "71b258d55a8a",
+      "title": "#软件 / 软件名称 ] myDV   抖音 第三方 TV 版 2.2 . 40",
+      "core_title": "#软件 / 软件名称 myDV 抖音 第三方 TV 版 2.2 . 40",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/f77dcbc311e1",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:07:49+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "0d32fcd58965": {
+      "id": "0d32fcd58965",
+      "title": "#软件 / 软件名称 ] 音频 剪辑 大师 v64 会员版",
+      "core_title": "#软件 / 软件名称 音频 剪辑 大师 v64 会员版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/f91f2bc25011",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:07:38+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "221db8625142": {
+      "id": "221db8625142",
+      "title": "#软件 / 软件名称 ] TickTick 滴答 清单 v8.2 . 4.0 高级 版",
+      "core_title": "#软件 / 软件名称 TickTick 滴答 清单 v8.2 . 4.0 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/b1120e8dd8e4",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:07:28+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "5c6bb82296d2": {
+      "id": "5c6bb82296d2",
+      "title": "#软件 / 软件名称 ] 威力 导演   PowerDirector   v16.7 . 5 高级 版",
+      "core_title": "#软件 / 软件名称 威力 导演 PowerDirector v16.7 . 5 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/6b5559b94cf9",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:07:18+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "8b3c801b49da": {
+      "id": "8b3c801b49da",
+      "title": "#软件 / 软件名称 ] NP 管理器   v3.2 . 4 更新版",
+      "core_title": "#软件 / 软件名称 NP 管理器 v3.2 . 4 更新版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/f520ac6dcede",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:07:08+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "9bde3a88c0c8": {
+      "id": "9bde3a88c0c8",
+      "title": "#软件 / 软件名称 ] Lightroom   照片 编辑器 v11.6 . 12 高级 版",
+      "core_title": "#软件 / 软件名称 Lightroom 照片 编辑器 v11.6 . 12 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/088aecdae6c3",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:06:58+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "f366e2971479": {
+      "id": "f366e2971479",
+      "title": "#软件 / 软件名称 ] InShot 视频 编辑 v2.250 . 1556 高级 版",
+      "core_title": "#软件 / 软件名称 InShot 视频 编辑 v2.250 . 1556 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/a219ff3a6911",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:06:42+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "ccabcf998b7d": {
+      "id": "ccabcf998b7d",
+      "title": "#软件 / 软件名称 ] 微信 输入法 ( 微信 键盘 )   v4.0 . 1   正式版",
+      "core_title": "#软件 / 软件名称 微信 输入法 ( 微信 键盘 ) v4.0 . 1 正式版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/027300a0b9a7",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:04:54+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "35a9e8c181a7": {
+      "id": "35a9e8c181a7",
+      "title": "#软件 / 软件名称 ] 第三方 款酷 安 c001apk   V1.5 . 0",
+      "core_title": "#软件 / 软件名称 第三方 款酷 安 c001apk V1.5 . 0",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/e23c8dfc4d4d",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:04:44+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "869d5d6a5a25": {
+      "id": "869d5d6a5a25",
+      "title": "#软件 / 软件名称 ] 电路 电压 电流 模拟器 2.5 . 0",
+      "core_title": "#软件 / 软件名称 电路 电压 电流 模拟器 2.5 . 0",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/346cb69aba01",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:04:33+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "d3317d8fb11d": {
+      "id": "d3317d8fb11d",
+      "title": "#软件 / 软件名称 ] 好听 TV   v1.4 . 1 无广告 版",
+      "core_title": "#软件 / 软件名称 好听 TV v1.4 . 1 无广告 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/cc74dfea2f0d",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:04:22+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "aba777af88d0": {
+      "id": "aba777af88d0",
+      "title": "#软件 / 软件名称 ] 水杉 输入法 0.6 . 0",
+      "core_title": "#软件 / 软件名称 水杉 输入法 0.6 . 0",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/1e6c3a3b0720",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:04:11+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "4d9cb7ed9eba": {
+      "id": "4d9cb7ed9eba",
+      "title": "#软件 / 软件名称 ] 焦点 哔哩 1.8 . 1 清爽 版",
+      "core_title": "#软件 / 软件名称 焦点 哔哩 1.8 . 1 清爽 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/49ec5b41eaaf",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:04:01+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "7a85eaf35331": {
+      "id": "7a85eaf35331",
+      "title": "#软件 / 软件名称 ] 最 亮 手电筒 v5.7 . 203 高级 版",
+      "core_title": "#软件 / 软件名称 最 亮 手电筒 v5.7 . 203 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/3bbb2c7cef03",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:03:37+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "f844432815c8": {
+      "id": "f844432815c8",
+      "title": "#软件 / 软件名称 ] 超级 证件照 v1.0 . 7 高级 版",
+      "core_title": "#软件 / 软件名称 超级 证件照 v1.0 . 7 高级 版",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/1cef66c351ca",
+      "source_pwd": null,
+      "channel": "fuliziyuan",
+      "posted_at": "2026-11-02T08:03:23+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "3e515ee149ee": {
+      "id": "3e515ee149ee",
+      "title": "小说推文最新賺钱全流程",
+      "core_title": "小说推文最新賺钱全流程",
+      "type": "ebook",
+      "source_url": "https://pan.quark.cn/s/50e53efc060f",
+      "source_pwd": null,
+      "channel": "okpojie",
+      "posted_at": "2026-11-02T08:00:37+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "f11412e28897": {
+      "id": "f11412e28897",
+      "title": "《超时空采访哲学家》（azw3+epub+mobi+pdf)",
+      "core_title": "超时空采访哲学家",
+      "type": "ebook",
+      "source_url": "https://pan.quark.cn/s/1930e1152725",
+      "source_pwd": null,
+      "channel": "okpojie",
+      "posted_at": "2026-11-02T07:30:03+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "a21b210cdbd7": {
+      "id": "a21b210cdbd7",
+      "title": "AI广告实战制作商业级短片",
+      "core_title": "AI广告实战制作商业级短片",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/a3ca3e14db8f",
+      "source_pwd": null,
+      "channel": "shareAliyun",
+      "posted_at": "2026-11-02T06:45:54+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "1b98357a29e2": {
+      "id": "1b98357a29e2",
+      "title": "口播剪辑入门到实操课程，电脑手机双端制作教学",
+      "core_title": "口播剪辑入门到实操课程，电脑手机双端制作教学",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/2de45a9dacaf",
+      "source_pwd": null,
+      "channel": "shareAliyun",
+      "posted_at": "2026-11-02T06:22:01+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "e1b7019766fa": {
+      "id": "e1b7019766fa",
+      "title": "飞书全套教程，多维表格+知识库+自动化工作流",
+      "core_title": "飞书全套教程，多维表格+知识库+自动化工作流",
+      "type": "course",
+      "source_url": "https://pan.quark.cn/s/e14432b38e4e",
+      "source_pwd": null,
+      "channel": "shareAliyun",
+      "posted_at": "2026-11-02T06:05:30+00:00",
+      "risk": {
+        "level": "low",
+        "reasons": []
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    },
+    "9b70da7f167d": {
+      "id": "9b70da7f167d",
+      "title": "Adobe Photoshop 2026（PS2026） v27.9.1.1 中文直装版：AI本地化部署+ultracaf大模型离线赋能设计新纪元",
+      "core_title": "Adobe Photoshop 2026（PS2026） v27.9.1.1 中文直装版：AI本地化部署+ultracaf大模型离线赋能设计新纪元",
+      "type": "software",
+      "source_url": "https://pan.quark.cn/s/a79c82194828",
+      "source_pwd": null,
+      "channel": "softwaregods",
+      "posted_at": "2026-11-02T06:00:59+00:00",
+      "risk": {
+        "level": "medium",
+        "reasons": [
+          "命中提醒词：破解"
+        ]
+      },
+      "status": "candidate",
+      "added_at": "2026-11-02T15:38:07+00:00"
+    }
+  },
+  "log": [
+    {
+      "at": "2026-11-02T15:38:07+00:00",
+      "action": "scan",
+      "added": 40,
+      "stats": {
+        "low": 37,
+        "medium": 3,
+        "high": 0,
+        "blocked": 0
+      }
+    },
+    {
+      "at": "2026-11-02T15:38:18+00:00",
+      "action": "approve",
+      "count": 2
+    }
+  ]
+}

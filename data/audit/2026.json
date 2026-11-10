@@ -1,0 +1,23 @@
+{
+  "year": 2026,
+  "generated_at": "2026-11-02T12:39:04+00:00",
+  "links": 2199,
+  "resources": 1183,
+  "multi_source": 310,
+  "invalid": 5,
+  "unchecked": 1799,
+  "no_desc": 127,
+  "no_core_title": 127,
+  "no_group_key": 0,
+  "stale_invalid": 0,
+  "channels": 13,
+  "providers": {
+    "quark": 1307,
+    "xunlei": 341,
+    "baidu": 329,
+    "uc": 116,
+    "aliyun": 103,
+    "139": 2,
+    "115": 1
+  }
+}
