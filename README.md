@@ -51,10 +51,13 @@ python tools/export.py --days 0        # 全量（本地排查用，别发布）
 | 热文件 90 天 | 首屏只拉最近数据，1 MB 级 |
 | 季度分片 | 库存全留，单片封顶（`--shard month` 可再小到 1/3） |
 | 年度 compact | 体检 + 按需清理死链（默认不删，库存是资产） |
-| data 分支滚动提交 | git 历史不累积，仓库体积 = 最新文件 |
+| 明细按月切块 | `data/links/YYYY-MM.jsonl.gz`，单文件永远 MB 级，不再撞 GitHub 100 MB 硬限 |
+| data 分支增量提交 | 以远端分支为基线，只推变化的对象；数据没变就跳过推送 |
 
 **数据为什么在独立分支**：数据是派生产物，每次全量重写。若跟着代码提交，每天 20 次 × 整文件 = 每月上百 MB 的 git 历史。
-`data` 分支每次用 `git push -f` 覆盖成**单条提交**，主仓永远干净，仓库体积只等于最新文件。
+`data` 分支由 CI 维护，提交是**增量**的（`git fetch origin data` → `reset --hard` → 覆盖工作树 → commit），
+每次只上传真正变化的 blob；`data/links.jsonl` 明文只在运行时存在，发布前会被 `tools/pack_links.py --split`
+切成按月 gzip，恢复时再 `--join` 拼回来。所以单文件不会无限长、每次推送也不会整棵树重传。
 
 本地跑（纯标准库，零依赖）：
 
@@ -279,7 +282,7 @@ session 生成一次后存到仓库 Secret `TG_SESSION`（等价于账号凭证�
 
 ## 存储演进
 
-- **起步**：`data/links.jsonl` 直接 commit（简单，但每 30 分钟一次提交会让仓库膨胀）。
+- **起步**：`data/links.jsonl` 直接 commit（简单，但单文件只增不减，迟早撞 100 MB 硬限 —— 现已改成按月 gzip 切块）。
 - **进阶**：写到独立 `data` 分支，或推到 Cloudflare D1 / R2 / 自己的 VPS 接口，仓库只留代码。
 - **搜索**：Meilisearch（中文分词好、开箱即用）或 SQLite FTS5（零依赖，适合静态站）。
 

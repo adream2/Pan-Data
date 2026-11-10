@@ -53,7 +53,9 @@ jobs:
           git fetch --depth 1 origin data || true
           if git rev-parse --verify -q origin/data >/dev/null; then
             git archive origin/data data | tar -x -C "$GITHUB_WORKSPACE"
+            python tools/pack_links.py --join      # 明细按月压缩存储，先拼回单文件
             echo "已恢复历史数据"
+            du -sh data || true
           else
             echo "首次运行，无历史数据"
           fi
@@ -91,13 +93,23 @@ jobs:
           set -e
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 明细按月切块 + gzip：单文件永不逼近 100MB 硬限
+          python tools/pack_links.py --split
           mkdir -p /tmp/datarepo && cd /tmp/datarepo
           git init -q -b data
-          mkdir -p data
-          cp -r "$GITHUB_WORKSPACE/data/." data/
-          rm -f data/*.tmp
-          git add -A
-          git commit -q -m "data: mtproto $(date -u +%FT%TZ)"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push -f origin data
+          # 以远端 data 分支为基线，只推变化的对象（原先每次 git init 全量重传）
+          git fetch -q --depth 1 origin data || true
+          if git rev-parse -q --verify FETCH_HEAD >/dev/null; then git reset -q --hard FETCH_HEAD; fi
+          rm -rf data && cp -r "$GITHUB_WORKSPACE/data" data
+          rm -f data/*.tmp
+          # 兜底护栏：有文件超过 95MB 就直接红，别等 GitHub 拒
+          python "$GITHUB_WORKSPACE/tools/pack_links.py" --check --root /tmp/datarepo
+          git add -A
+          if git diff --cached --quiet; then
+            echo "数据无变化，跳过推送"
+            exit 0
+          fi
+          git commit -q -m "data: mtproto $(date -u +%FT%TZ)"
+          git push origin data || { echo "推送被拒，改强制覆盖"; git push -f origin data; }
           echo "已发布 ${{ github.server_url }}/${GITHUB_REPOSITORY}/tree/data"

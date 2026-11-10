@@ -209,15 +209,29 @@ def envelope(payload_resources: list[dict], **extra) -> dict:
     return data
 
 
+def _without_ts(text: str) -> str:
+    """把 generated_at 抹掉再比，避免「只是时间戳变了」被当成内容变化。"""
+    try:
+        obj = json.loads(text)
+    except Exception:
+        return text
+    if isinstance(obj, dict):
+        obj.pop("generated_at", None)
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+
+
 def write_if_changed(path: Path, payload: dict) -> tuple[bool, int]:
-    """分片内容没变就不重写，避免每次 CI 都动归档文件。"""
+    """内容没变就不重写，避免每次 CI 都动归档文件。
+
+    分片一旦「只在真变时才变」，data 分支每次提交就只有当月分片 + 热文件在动，
+    增量 push 的体积能降一个数量级（原先是整棵树重传）。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
-    digest = hashlib.sha1(text.encode()).hexdigest()
     if path.exists():
-        old = path.read_bytes()
-        if hashlib.sha1(old).hexdigest() == hashlib.sha1(text.encode()).hexdigest():
-            return False, len(old)
+        old = path.read_text(encoding="utf-8")
+        if _without_ts(old) == _without_ts(text):
+            return False, len(old.encode())
     path.write_text(text, encoding="utf-8")
     return True, len(text.encode())
 
