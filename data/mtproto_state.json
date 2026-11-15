@@ -1,9 +1,9 @@
 {
   "freekecheng": {
     "last_id": 22020,
-    "backfill_before": 3701,
-    "scanned": 14,
-    "links": 0
+    "backfill_before": 2500,
+    "scanned": 1200,
+    "links": 11
   },
   "PanjClub": {
     "last_id": 13154,
@@ -13,9 +13,9 @@
   },
   "Quark_Movies": {
     "last_id": 78589,
-    "backfill_before": 73228,
-    "scanned": 15,
-    "links": 0
+    "backfill_before": 72821,
+    "scanned": 400,
+    "links": 96
   },
   "yunpanbaidu": {
     "last_id": 135,
@@ -25,14 +25,14 @@
   },
   "QuarkShare": {
     "last_id": 11384,
-    "backfill_before": 6965,
-    "scanned": 0,
-    "links": 0
+    "backfill_before": 6564,
+    "scanned": 400,
+    "links": 612
   },
   "quarkshare": {
     "last_id": 11384,
-    "backfill_before": 6965,
-    "scanned": 0,
+    "backfill_before": 6564,
+    "scanned": 400,
     "links": 0
   },
   "kuakeshare": {
@@ -49,51 +49,51 @@
   },
   "leoziyuan": {
     "last_id": 3251355,
-    "backfill_before": 3169806,
-    "scanned": 555,
-    "links": 443
+    "backfill_before": 3166776,
+    "scanned": 1800,
+    "links": 1163
   },
   "yunpan139": {
     "last_id": 3102,
     "backfill_before": 2,
-    "scanned": 3,
+    "scanned": 0,
     "links": 0
   },
   "yunpanx": {
     "last_id": 169538,
-    "backfill_before": 148871,
-    "scanned": 9,
+    "backfill_before": 147670,
+    "scanned": 1200,
     "links": 0
   },
   "quarkdj": {
     "last_id": 13595,
-    "backfill_before": 9177,
-    "scanned": 0,
-    "links": 0
+    "backfill_before": 8776,
+    "scanned": 400,
+    "links": 400
   },
   "fuliziyuan": {
     "last_id": 190135,
-    "backfill_before": 184865,
-    "scanned": 0,
-    "links": 0
+    "backfill_before": 184464,
+    "scanned": 400,
+    "links": 223
   },
   "shareAliyun": {
     "last_id": 100642,
-    "backfill_before": 61403,
-    "scanned": 27,
-    "links": 0
+    "backfill_before": 60831,
+    "scanned": 391,
+    "links": 301
   },
   "yunpanxunlei": {
     "last_id": 39060,
     "backfill_before": 3,
-    "scanned": 57,
+    "scanned": 0,
     "links": 0
   },
   "yunpanuc": {
     "last_id": 16737,
-    "backfill_before": 1760,
-    "scanned": 12,
-    "links": 0
+    "backfill_before": 1347,
+    "scanned": 400,
+    "links": 367
   },
   "XiangxiuNBB": {
     "last_id": 152011,
@@ -103,128 +103,128 @@
   },
   "okpojie": {
     "last_id": 38154,
-    "backfill_before": 33228,
-    "scanned": 12,
+    "backfill_before": 32827,
+    "scanned": 400,
     "links": 0
   },
   "softwaregods": {
     "last_id": 12777,
-    "backfill_before": 7862,
-    "scanned": 13,
-    "links": 0
+    "backfill_before": 7461,
+    "scanned": 400,
+    "links": 62
   },
   "happyflims": {
     "last_id": 22396,
-    "backfill_before": 17467,
-    "scanned": 13,
+    "backfill_before": 17066,
+    "scanned": 400,
     "links": 0
   },
   "allgamegod": {
     "last_id": 22986,
-    "backfill_before": 18059,
-    "scanned": 13,
-    "links": 0
+    "backfill_before": 17658,
+    "scanned": 400,
+    "links": 117
   },
   "allgirlhunter": {
     "last_id": 23122,
-    "backfill_before": 18193,
-    "scanned": 13,
-    "links": 1
+    "backfill_before": 17792,
+    "scanned": 400,
+    "links": 6
   },
   "shortdramagod": {
     "last_id": 10101,
-    "backfill_before": 5176,
-    "scanned": 13,
-    "links": 0
+    "backfill_before": 4775,
+    "scanned": 400,
+    "links": 20
   },
   "netdisk_movies": {
     "last_id": 5997,
-    "backfill_before": 1068,
-    "scanned": 0,
-    "links": 0
+    "backfill_before": 586,
+    "scanned": 400,
+    "links": 511
   },
   "aliyun_4k_movies": {
     "last_id": 65529,
-    "backfill_before": 60528,
-    "scanned": 6,
-    "links": 0
+    "backfill_before": 60115,
+    "scanned": 400,
+    "links": 684
   },
   "naclzy": {
     "last_id": 32273,
     "backfill_before": 2,
-    "scanned": 10,
+    "scanned": 0,
     "links": 0
   },
   "yespojie": {
     "last_id": 39429,
-    "backfill_before": 9118,
-    "scanned": 12,
-    "links": 0
+    "backfill_before": 7298,
+    "scanned": 1789,
+    "links": 474
   },
   "quark_share_group": {
     "last_id": 763402,
     "backfill_before": 283271,
-    "scanned": 114,
-    "links": 1
+    "scanned": 0,
+    "links": 0
   },
   "share_pan": {
     "last_id": 241407,
     "backfill_before": 103366,
-    "scanned": 163,
+    "scanned": 0,
     "links": 0
   },
   "movies12138": {
     "last_id": 13991,
     "backfill_before": 1,
-    "scanned": 18,
+    "scanned": 0,
     "links": 0
   },
   "KaiPanshare": {
     "last_id": 7591,
     "backfill_before": 5,
-    "scanned": 2,
+    "scanned": 0,
     "links": 0
   },
   "wpzyk": {
     "last_id": 5191,
     "backfill_before": 140,
-    "scanned": 4,
+    "scanned": 0,
     "links": 0
   },
   "qukanmovie": {
     "last_id": 12662,
-    "backfill_before": 8172,
-    "scanned": 11,
+    "backfill_before": 7747,
+    "scanned": 400,
     "links": 0
   },
   "dianying4k": {
     "last_id": 1770,
     "backfill_before": 58,
-    "scanned": 5,
-    "links": 3
+    "scanned": 0,
+    "links": 0
   },
   "vip115hot": {
     "last_id": 6347,
     "backfill_before": 7,
-    "scanned": 12,
+    "scanned": 0,
     "links": 0
   },
   "wfysfx03": {
     "last_id": 2986,
     "backfill_before": 1,
-    "scanned": 6,
+    "scanned": 0,
     "links": 0
   },
   "djya5": {
     "last_id": 3211,
     "backfill_before": 2496,
-    "scanned": 2,
+    "scanned": 0,
     "links": 0
   },
   "baidu_netdisk": {
     "last_id": 22732,
-    "backfill_before": 21251,
-    "scanned": 18,
-    "links": 0
+    "backfill_before": 20849,
+    "scanned": 400,
+    "links": 18
   }
 }
